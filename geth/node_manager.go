@@ -72,10 +72,10 @@ var (
 )
 
 // CreateAndRunNode creates and starts running Geth node locally (exposing given RPC port along the way)
-func CreateAndRunNode(dataDir string, rpcPort int) error {
+func CreateAndRunNode(dataDir string, rpcPort int, tlsEnabled bool) error {
 	defer HaltOnPanic()
 
-	nodeManager := NewNodeManager(dataDir, rpcPort)
+	nodeManager := NewNodeManager(dataDir, rpcPort, tlsEnabled)
 
 	if nodeManager.NodeInited() {
 		nodeManager.RunNode()
@@ -87,19 +87,19 @@ func CreateAndRunNode(dataDir string, rpcPort int) error {
 }
 
 // NewNodeManager makes new instance of node manager
-func NewNodeManager(dataDir string, rpcPort int) *NodeManager {
+func NewNodeManager(dataDir string, rpcPort int, tlsEnabled bool) *NodeManager {
 	createOnce.Do(func() {
 		nodeManagerInstance = &NodeManager{
 			config: &NodeManagerConfig{
 				DataDir:    dataDir,
 				RPCPort:    rpcPort,
-				TLSEnabled: false,
+				TLSEnabled: tlsEnabled,
 			},
 			services: &NodeServiceStack{
 				jailedRequestQueue: NewJailedRequestsQueue(),
 			},
 		}
-		nodeManagerInstance.node = MakeNode(dataDir, rpcPort)
+		nodeManagerInstance.node = MakeNode(dataDir, rpcPort, tlsEnabled)
 	})
 
 	return nodeManagerInstance

@@ -1,11 +1,13 @@
 package geth
 
 import (
+	"crypto/tls"
 	"errors"
 	"fmt"
 	"io"
 	"math/big"
 	"os"
+	"path"
 	"path/filepath"
 	"reflect"
 	"runtime"
@@ -24,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/ethereum/go-ethereum/rlp"
+	"github.com/ethereum/go-ethereum/rpc"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv2"
 )
 
@@ -78,6 +81,7 @@ var (
 	ErrEthServiceRegistrationFailure = errors.New("failed to register the Ethereum service")
 	ErrSshServiceRegistrationFailure = errors.New("failed to register the Whisper service")
 	ErrLightEthRegistrationFailure   = errors.New("failed to register the LES service")
+	ErrDataDirCreationFailure        = errors.New("failed to create data folder")
 )
 
 type Node struct {
@@ -92,13 +96,22 @@ func (n *Node) Inited() bool {
 }
 
 // MakeNode create a geth node entity
-func MakeNode(dataDir string, rpcPort int) *Node {
+func MakeNode(dataDir string, rpcPort int, tlsEnabled bool) *Node {
 	glog.CopyStandardLogTo("INFO")
 	glog.SetToStderr(true)
 
 	if UseTestnet {
 		dataDir = filepath.Join(dataDir, "testnet")
 	}
+	// make sure that data dir exists
+	if _, err := os.Stat(dataDir); os.IsNotExist(err) {
+		if err := os.MkdirAll(dataDir, 0755); err != nil {
+			Fatalf(ErrDataDirCreationFailure)
+		}
+	}
+
+	// configure TLS support
+	tlsConfig := makeTLSConfig(dataDir, tlsEnabled)
 
 	// configure required node (should you need to update node's config, e.g. add bootstrap nodes, see node.Config)
 	config := &node.Config{
@@ -118,6 +131,8 @@ func MakeNode(dataDir string, rpcPort int) *Node {
 		HTTPPort:          rpcPort,
 		HTTPCors:          "*",
 		HTTPModules:       strings.Split("db,eth,net,web3,shh,personal,admin", ","), // TODO remove "admin" on main net
+		TLSEnabled:        tlsEnabled,
+		TLSConfig:         tlsConfig,
 	}
 
 	stack, err := node.New(config)
@@ -191,6 +206,23 @@ func activateShhService(stack *node.Node) error {
 	}
 
 	return nil
+}
+
+// makeTLSConfig creates TLS configuration. Defaults to empty config (for non-TSL node)
+func makeTLSConfig(dataDir string, tlsEnabled bool) *tls.Config {
+	var tlsConfig *tls.Config
+	var err error
+
+	if tlsEnabled {
+		certPath := path.Join(dataDir, rpc.DefaultTLSCertFile)
+		keyPath := path.Join(dataDir, rpc.DefaultTLSKeyFile)
+		tlsConfig, err = rpc.MakeServerTLSConfig(node.DefaultHTTPHost, certPath, keyPath)
+		if err != nil {
+			Fatalf(fmt.Errorf("%v: %v", ErrNodeMakeFailure, err))
+		}
+	}
+
+	return tlsConfig
 }
 
 // makeChainConfig reads the chain configuration from the database in the datadir.
