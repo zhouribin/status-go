@@ -7,9 +7,12 @@ import (
 	"errors"
 	"fmt"
 	"io/ioutil"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/core"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -106,10 +109,30 @@ type SwarmConfig struct {
 	Enabled bool
 }
 
+// BootCluster holds configuration for supporting boot cluster, which is a temporary
+// means for mobile devices to get connected to Ethereum network (UDP-based discovery
+// may not be available, so we need means to discover the network manually).
+type BootClusterConfig struct {
+	// Enabled flag specifies whether feature is enabled
+	Enabled bool
+
+	// RootNumber CHT root number
+	RootNumber int
+
+	// RootHash is hash of CHT root for a given root number
+	RootHash string
+
+	// BootNodes list of bootstrap nodes for a given network (Ropsten, Rinkeby, Homestead),
+	// for a given mode (production vs development)
+	BootNodes []string
+}
+
 // NodeConfig stores configuration options for a node
 type NodeConfig struct {
-	// TestNet flag whether given configuration describes a test or mainnet
-	TestNet bool
+	// DevMode is true when given configuration is to be used during development.
+	// For production, this flag should be turned off, so that more strict requirements
+	// are applied to node's configuration
+	DevMode bool
 
 	// NetworkId sets network to use for selecting peers to connect to
 	NetworkId uint64
@@ -181,6 +204,9 @@ type NodeConfig struct {
 	// LogToStderr defines whether logged info should also be output to os.Stderr
 	LogToStderr bool
 
+	// BootClusterConfig extra configuration for supporting cluster
+	BootClusterConfig *BootClusterConfig `json:"BootClusterConfig,"`
+
 	// LightEthConfig extra configuration for LES
 	LightEthConfig *LightEthConfig `json:"LightEthConfig,"`
 
@@ -192,8 +218,9 @@ type NodeConfig struct {
 }
 
 // NewNodeConfig creates new node configuration object
-func NewNodeConfig(dataDir string, networkId uint64) (*NodeConfig, error) {
+func NewNodeConfig(dataDir string, networkId uint64, devMode bool) (*NodeConfig, error) {
 	nodeConfig := &NodeConfig{
+		DevMode:         devMode,
 		NetworkId:       networkId,
 		DataDir:         dataDir,
 		Name:            ClientIdentifier,
@@ -209,6 +236,10 @@ func NewNodeConfig(dataDir string, networkId uint64) (*NodeConfig, error) {
 		LogFile:         LogFile,
 		LogLevel:        LogLevel,
 		LogToStderr:     LogToStderr,
+		BootClusterConfig: &BootClusterConfig{
+			Enabled:   true,
+			BootNodes: []string{},
+		},
 		LightEthConfig: &LightEthConfig{
 			Enabled:       true,
 			DatabaseCache: DatabaseCache,
@@ -225,64 +256,17 @@ func NewNodeConfig(dataDir string, networkId uint64) (*NodeConfig, error) {
 		SwarmConfig: &SwarmConfig{},
 	}
 
-	// auto-populate some dependent values
-	if err := nodeConfig.populateGenesis(); err != nil {
-		return nil, err
-	}
-	if err := nodeConfig.populateDirs(); err != nil {
+	// adjust dependent values
+	if err := nodeConfig.updateConfig(); err != nil {
 		return nil, err
 	}
 
 	return nodeConfig, nil
 }
 
-// populateDirs updates directories that should be wrt to DataDir
-func (c *NodeConfig) populateDirs() error {
-	makeSubDirPath := func(baseDir, subDir string) string {
-		if len(baseDir) == 0 {
-			return ""
-		}
-
-		return filepath.Join(baseDir, subDir)
-	}
-	if len(c.KeyStoreDir) == 0 {
-		c.KeyStoreDir = makeSubDirPath(c.DataDir, KeyStoreDir)
-	}
-
-	if len(c.WhisperConfig.DataDir) == 0 {
-		c.WhisperConfig.DataDir = makeSubDirPath(c.DataDir, WhisperDataDir)
-	}
-
-	return nil
-}
-
-// populateChainConfig does necessary adjustments to config object (depending on network node will be runnin on)
-func (c *NodeConfig) populateGenesis() error {
-	c.TestNet = false
-	if c.NetworkId == TestNetworkId {
-		c.TestNet = true
-	}
-
-	var genesis *core.Genesis
-	if c.TestNet {
-		genesis = core.DefaultTestnetGenesisBlock()
-	} else {
-		genesis = core.DefaultGenesisBlock()
-	}
-
-	// encode the genesis into JSON
-	enc, err := json.Marshal(genesis)
-	if err != nil {
-		return err
-	}
-	c.LightEthConfig.Genesis = string(enc)
-
-	return nil
-}
-
 // LoadNodeConfig parses incoming JSON and returned it as Config
 func LoadNodeConfig(configJSON string) (*NodeConfig, error) {
-	nodeConfig, err := NewNodeConfig("", 0)
+	nodeConfig, err := NewNodeConfig("", 0, true)
 	if err != nil {
 		return nil, err
 	}
@@ -296,10 +280,7 @@ func LoadNodeConfig(configJSON string) (*NodeConfig, error) {
 	}
 
 	// repopulate
-	if err := nodeConfig.populateGenesis(); err != nil {
-		return nil, err
-	}
-	if err := nodeConfig.populateDirs(); err != nil {
+	if err := nodeConfig.updateConfig(); err != nil {
 		return nil, err
 	}
 
@@ -331,6 +312,119 @@ func (c *NodeConfig) Save() error {
 	}
 
 	log.Info(fmt.Sprintf("config file saved: %v", configFilePath))
+	return nil
+}
+
+// updateConfig traverses configuration and adjusts dependent fields
+// (we have a development/production and mobile/full node dependent configurations)
+func (c *NodeConfig) updateConfig() error {
+	if err := c.updateGenesisConfig(); err != nil {
+		return err
+	}
+	if err := c.updateBootClusterConfig(); err != nil {
+		return err
+	}
+	if err := c.updateRelativeDirsConfig(); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// updateGenesisConfig does necessary adjustments to config object (depending on network node will be runnin on)
+func (c *NodeConfig) updateGenesisConfig() error {
+	var genesis *core.Genesis
+
+	switch c.NetworkId {
+	case MainNetworkId:
+		genesis = core.DefaultGenesisBlock()
+	case RopstenNetworkId:
+		genesis = core.DefaultTestnetGenesisBlock()
+	default:
+		return nil
+	}
+
+	// encode the genesis into JSON
+	enc, err := json.Marshal(genesis)
+	if err != nil {
+		return err
+	}
+	c.LightEthConfig.Genesis = string(enc)
+
+	return nil
+}
+
+// updateBootClusterConfig loads boot nodes and CHT for a given network and mode.
+// This is necessary until we have LES protocol support CHT sync, and better node
+// discovery on mobile devices)
+func (c *NodeConfig) updateBootClusterConfig() error {
+	if !c.BootClusterConfig.Enabled {
+		return nil
+	}
+
+	// TODO: Remove this thing as this is an ugly hack.
+	// Once CHT sync sub-protocol is working in LES, we will rely on it, as it provides
+	// decentralized solution. For now, in order to avoid forcing users to long sync times
+	// we use central static resource
+	type subClusterConfig struct {
+		Number    int      `json:"number"`
+		Hash      string   `json:"hash"`
+		BootNodes []string `json:"bootnodes"`
+	}
+	type clusterConfig struct {
+		NetworkID   int              `json:"networkID"`
+		GenesisHash string           `json:"genesisHash"`
+		Prod        subClusterConfig `json:"prod"`
+		Dev         subClusterConfig `json:"dev"`
+	}
+
+	client := &http.Client{Timeout: 5 * time.Second}
+	r, err := client.Get(BootClusterConfigURL + "?u=" + strconv.Itoa(int(time.Now().Unix())))
+	if err != nil {
+		return err
+	}
+	defer r.Body.Close()
+
+	var clusters []clusterConfig
+	err = json.NewDecoder(r.Body).Decode(&clusters)
+	if err != nil {
+		return err
+	}
+
+	for _, cluster := range clusters {
+		if cluster.NetworkID == int(c.NetworkId) {
+			c.BootClusterConfig.RootNumber = cluster.Prod.Number
+			c.BootClusterConfig.RootHash = cluster.Prod.Hash
+			c.BootClusterConfig.BootNodes = cluster.Prod.BootNodes
+			if c.DevMode {
+				c.BootClusterConfig.RootNumber = cluster.Dev.Number
+				c.BootClusterConfig.RootHash = cluster.Dev.Hash
+				c.BootClusterConfig.BootNodes = cluster.Dev.BootNodes
+			}
+			break
+		}
+	}
+
+	return nil
+}
+
+// updateRelativeDirsConfig updates directories that should be wrt to DataDir
+func (c *NodeConfig) updateRelativeDirsConfig() error {
+	makeSubDirPath := func(baseDir, subDir string) string {
+		if len(baseDir) == 0 {
+			return ""
+		}
+
+		return filepath.Join(baseDir, subDir)
+	}
+	if len(c.KeyStoreDir) == 0 {
+		c.KeyStoreDir = makeSubDirPath(c.DataDir, KeyStoreDir)
+	}
+
+	if len(c.WhisperConfig.DataDir) == 0 {
+		c.WhisperConfig.DataDir = makeSubDirPath(c.DataDir, WhisperDataDir)
+	}
+
 	return nil
 }
 

@@ -106,7 +106,7 @@ func testGetDefaultConfig(t *testing.T) bool {
 	// test Mainnet config
 	nodeConfig := params.NodeConfig{}
 
-	rawResponse := GenerateConfig(C.CString("/tmp/data-folder"), 1)
+	rawResponse := GenerateConfig(C.CString("/tmp/data-folder"), 1, 1)
 	if err := json.Unmarshal([]byte(C.GoString(rawResponse)), &nodeConfig); err != nil {
 		t.Errorf("cannot decode reponse (%s): %v", C.GoString(rawResponse), err)
 		return false
@@ -153,7 +153,7 @@ func testGetDefaultConfig(t *testing.T) bool {
 
 	// test Testnet
 	nodeConfig = params.NodeConfig{}
-	rawResponse = GenerateConfig(C.CString("/tmp/data-folder"), 3)
+	rawResponse = GenerateConfig(C.CString("/tmp/data-folder"), 3, 1)
 	if err := json.Unmarshal([]byte(C.GoString(rawResponse)), &nodeConfig); err != nil {
 		t.Errorf("cannot decode reponse (%s): %v", C.GoString(rawResponse), err)
 		return false
@@ -1356,7 +1356,7 @@ func startTestNode(t *testing.T) <-chan struct{} {
 
 	go func() {
 		configJSON := `{
-			"NetworkId": ` + strconv.Itoa(params.TestNetworkId) + `,
+			"NetworkId": ` + strconv.Itoa(params.RopstenNetworkId) + `,
 			"DataDir": "` + geth.TestDataDir + `",
 			"HTTPPort": ` + strconv.Itoa(testConfig.Node.HTTPPort) + `,
 			"WSPort": ` + strconv.Itoa(testConfig.Node.WSPort) + `,

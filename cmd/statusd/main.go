@@ -18,6 +18,11 @@ var (
 )
 
 var (
+	// ProdModeFlag is whether we need dev or production settings
+	ProdModeFlag = cli.BoolFlag{
+		Name:  "production",
+		Usage: "Whether production settings should be loaded",
+	}
 	NodeKeyFileFlag = cli.StringFlag{
 		Name:  "nodekey",
 		Usage: "P2P node key file (private key)",
@@ -30,7 +35,7 @@ var (
 	NetworkIdFlag = cli.IntFlag{
 		Name:  "networkid",
 		Usage: "Network identifier (integer, 1=Frontier, 2=Morden (disused), 3=Ropsten)",
-		Value: params.TestNetworkId,
+		Value: params.RopstenNetworkId,
 	}
 	LightEthEnabledFlag = cli.BoolFlag{
 		Name:  "les",
@@ -121,7 +126,10 @@ func statusd(ctx *cli.Context) error {
 
 // makeNodeConfig parses incoming CLI options and returns node configuration object
 func makeNodeConfig(ctx *cli.Context) (*params.NodeConfig, error) {
-	nodeConfig, err := params.NewNodeConfig(ctx.GlobalString(DataDirFlag.Name), ctx.GlobalUint64(NetworkIdFlag.Name))
+	nodeConfig, err := params.NewNodeConfig(
+		ctx.GlobalString(DataDirFlag.Name),
+		ctx.GlobalUint64(NetworkIdFlag.Name),
+		!ctx.GlobalBool(ProdModeFlag.Name))
 	if err != nil {
 		return nil, err
 	}

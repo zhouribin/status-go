@@ -18,7 +18,7 @@ func TestLogger(t *testing.T) {
 	}
 	//defer os.RemoveAll(tmpDir)
 
-	nodeConfig, err := params.NewNodeConfig(tmpDir, params.TestNetworkId)
+	nodeConfig, err := params.NewNodeConfig(tmpDir, params.RopstenNetworkId, true)
 	if err != nil {
 		t.Fatal("cannot create config object")
 	}

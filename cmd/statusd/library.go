@@ -198,8 +198,8 @@ func DiscardTransactions(ids *C.char) *C.char {
 }
 
 //export GenerateConfig
-func GenerateConfig(datadir *C.char, networkId C.int) *C.char {
-	config, err := params.NewNodeConfig(C.GoString(datadir), uint64(networkId))
+func GenerateConfig(datadir *C.char, networkID C.int, devMode C.int) *C.char {
+	config, err := params.NewNodeConfig(C.GoString(datadir), uint64(networkID), devMode == 1)
 	if err != nil {
 		return makeJSONErrorResponse(err)
 	}
