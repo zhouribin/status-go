@@ -97,6 +97,7 @@ func init() {
 		faucetCommand,
 		lesCommand,
 		wnodeCommand,
+		extKeyCommand,
 	}
 	app.Flags = []cli.Flag{
 		ProdModeFlag,
