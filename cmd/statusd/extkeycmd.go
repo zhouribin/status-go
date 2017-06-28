@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"io/ioutil"
+	"encoding/hex"
 	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -58,7 +59,7 @@ func extKeyCommandHandler(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	fmt.Println("Account file has been created: ", addr)
+	fmt.Println("Account Address: ", addr)
 
 	return nil
 }
@@ -127,6 +128,8 @@ func importExtendedKey(extKey *extkeys.ExtendedKey, password string) (address, p
 		return address, "", err
 	}
 	pubKey = common.ToHex(crypto.FromECDSAPub(&key.PrivateKey.PublicKey))
+
+	fmt.Println("Private Key: ", hex.EncodeToString(crypto.FromECDSA(key.PrivateKey)))
 
 	return
 }
