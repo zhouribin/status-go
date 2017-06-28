@@ -239,7 +239,7 @@ func NewNodeConfig(dataDir string, networkID uint64, devMode bool) (*NodeConfig,
 		LogLevel:        LogLevel,
 		LogToStderr:     LogToStderr,
 		BootClusterConfig: &BootClusterConfig{
-			Enabled:   true,
+			Enabled:   false,
 			BootNodes: []string{},
 		},
 		LightEthConfig: &LightEthConfig{

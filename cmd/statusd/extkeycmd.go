@@ -2,6 +2,8 @@ package main
 
 import (
 	"fmt"
+	"io/ioutil"
+	"strings"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -18,7 +20,7 @@ var (
 	}
 	ExtKeyPassword = cli.StringFlag{
 		Name:  "password",
-		Usage: "Password to private key",
+		Usage: "File with password to private key",
 	}
 )
 
@@ -47,7 +49,12 @@ func extKeyCommandHandler(ctx *cli.Context) error {
 	}
 
 	// create account file
-	addr, _, err := createExtKey(ctx.String(ExtKeyMnemonic.Name), ctx.String(ExtKeyPassword.Name))
+	passwordFile := ctx.String(ExtKeyPassword.Name)
+	password, err := ioutil.ReadFile(passwordFile)
+	if err != nil {
+		return err
+	}
+	addr, _, err := createExtKey(ctx.String(ExtKeyMnemonic.Name), strings.TrimSpace(string(password)))
 	if err != nil {
 		return err
 	}
