@@ -17,7 +17,7 @@ import (
 var (
 	ExtKeyMnemonic = cli.StringFlag{
 		Name:  "mnemonic",
-		Usage: "12 words of mnemonic string",
+		Usage: "File with 12 words of mnemonic string",
 	}
 	ExtKeyPassword = cli.StringFlag{
 		Name:  "password",
@@ -55,7 +55,13 @@ func extKeyCommandHandler(ctx *cli.Context) error {
 	if err != nil {
 		return err
 	}
-	addr, _, err := createExtKey(ctx.String(ExtKeyMnemonic.Name), strings.TrimSpace(string(password)))
+
+	mnemonicFile := ctx.String(ExtKeyMnemonic.Name)
+	mnemonic, err := ioutil.ReadFile(mnemonicFile)
+	if err != nil {
+		return err
+	}
+	addr, _, err := createExtKey(strings.TrimSpace(string(mnemonic)), strings.TrimSpace(string(password)))
 	if err != nil {
 		return err
 	}
