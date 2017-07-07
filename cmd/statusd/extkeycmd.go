@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"encoding/hex"
 	"strings"
 
@@ -50,14 +49,12 @@ func extKeyCommandHandler(ctx *cli.Context) error {
 	}
 
 	// create account file
-	passwordFile := ctx.String(ExtKeyPassword.Name)
-	password, err := ioutil.ReadFile(passwordFile)
+	password := ctx.String(ExtKeyPassword.Name)
 	if err != nil {
 		return err
 	}
 
-	mnemonicFile := ctx.String(ExtKeyMnemonic.Name)
-	mnemonic, err := ioutil.ReadFile(mnemonicFile)
+	mnemonic := ctx.String(ExtKeyMnemonic.Name)
 	if err != nil {
 		return err
 	}
