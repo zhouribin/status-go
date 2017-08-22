@@ -16,6 +16,14 @@ statusgo-android: xgo
 	build/env.sh $(GOBIN)/xgo --image farazdagi/xgo --go=$(GO) -out statusgo --dest=$(GOBIN) --targets=android-16/aar -v $(shell build/testnet-flags.sh) ./cmd/statusd
 	@echo "Android cross compilation done."
 
+statusgo-linux: xgo
+	build/env.sh $(GOBIN)/xgo --image farazdagi/xgo --go=$(GO) -out statusgo --dest=$(GOBIN) --targets=linux/* -v $(shell build/testnet-flags.sh) ./cmd/statusd
+	@echo "linux cross compilation done."
+
+statusgo-windows: xgo
+	build/env.sh $(GOBIN)/xgo --image farazdagi/xgo --go=$(GO) -out statusgo --dest=$(GOBIN) --targets=windows/* -v $(shell build/testnet-flags.sh) ./cmd/statusd
+	@echo "windows cross compilation done."
+
 statusgo-ios: xgo
 	build/env.sh $(GOBIN)/xgo --image farazdagi/xgo --go=$(GO) -out statusgo --dest=$(GOBIN) --targets=ios-9.3/framework -v $(shell build/testnet-flags.sh) ./cmd/statusd
 	@echo "iOS framework cross compilation done."
