@@ -1,15 +1,150 @@
 package api_test
 
 import (
+	"encoding/json"
 	"errors"
 	"fmt"
 
+	gethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/status-im/status-go/geth/common"
 	"github.com/status-im/status-go/geth/node"
 	"github.com/status-im/status-go/geth/params"
+	"github.com/status-im/status-go/geth/rpc"
 	. "github.com/status-im/status-go/geth/testing"
 )
+
+type (
+	jsonrpcMessage struct {
+		Version string          `json:"jsonrpc"`
+		ID      json.RawMessage `json:"id,omitempty"`
+		Method  string          `json:"method,omitempty"`
+		Params  json.RawMessage `json:"params,omitempty"`
+		Error   *jsonError      `json:"error,omitempty"`
+		Result  json.RawMessage `json:"result,omitempty"`
+	}
+
+	jsonError struct {
+		Code    int         `json:"code,omitempty"`
+		Message string      `json:"message"`
+		Data    interface{} `json:"data,omitempty"`
+	}
+)
+
+func (s *BackendTestSuite) TestTwoAccountMessages() {
+	require := s.Require()
+	require.NotNil(s.backend)
+
+	s.StartTestBackend(params.RinkebyNetworkID)
+	defer s.StopTestBackend()
+
+	runningNode, err := s.backend.NodeManager().Node()
+	require.NoError(err)
+	require.NotNil(runningNode)
+
+	nodeConfig, err := s.backend.NodeManager().NodeConfig()
+	require.NoError(err)
+	require.NotNil(nodeConfig)
+
+	// whisperService := s.backend.WhisperService()
+	// require.NotNil(whisperService)
+	// whisperAPI := whisper.NewPublicWhisperAPI(whisperService)
+
+	var lesService *les.LightEthereum
+	require.NoError(runningNode.Service(&lesService))
+	require.NotNil(lesService)
+
+	// create an account
+	user1Address, user1Key, _, err := s.backend.AccountManager().CreateAccount(TestConfig.Account1.Password)
+	require.NoError(err)
+
+	// create an account
+	user2Address, user2Key, _, err := s.backend.AccountManager().CreateAccount(TestConfig.Account2.Password)
+	require.NoError(err)
+
+	user1KeyHex := gethcommon.ToHex([]byte(user1Key))
+	user2KeyHex := gethcommon.ToHex([]byte(user2Key))
+
+	// ensure that there is still no accounts returned
+	accounts := lesService.StatusBackend.AccountManager().Accounts()
+	require.Zero(len(accounts), "accounts returned, while there should be none (we haven't logged in yet)")
+
+	// select user 1 account
+	err = s.backend.AccountManager().SelectAccount(user1Address, TestConfig.Account1.Password)
+	require.NoError(err, "account selection failed")
+
+	// select user2 account
+	err = s.backend.AccountManager().SelectAccount(user2Address, TestConfig.Account2.Password)
+	require.NoError(err, "account selection failed")
+
+	// at this point user2 should show up
+	accounts = lesService.StatusBackend.AccountManager().Accounts()
+	require.Equal(1, len(accounts), "exactly one accounts is expected (1 main account)")
+	require.Equal(string(accounts[0].Hex()), "0x"+user2Address)
+
+	client, err := rpc.NewClient(runningNode, nodeConfig.UpstreamConfig)
+	require.NoError(err)
+	require.NotNil(client)
+
+	node.SetDefaultNodeNotificationHandler(func(jsonEvent string) { // nolint :dupl
+		var envelope node.SignalEnvelope
+		err := json.Unmarshal([]byte(jsonEvent), &envelope)
+		s.NoError(err, fmt.Sprintf("cannot unmarshal JSON: %s", jsonEvent))
+		fmt.Printf("Notification: %#v\n", envelope)
+	})
+
+	symKey := client.CallRaw(`{
+		"id": 1,
+		"jsonrpc": "2.0",
+		"method": "shh_newSymKey",
+		"params":[]
+	}`)
+
+	var symKeyRes jsonrpcMessage
+	err = json.Unmarshal([]byte(symKey), &symKeyRes)
+	require.NoError(err)
+	require.Nil(symKeyRes.Error)
+
+	filterMsgRes := client.CallRaw(`{
+		"id": 2,
+		"jsonrpc": "2.0",
+		"method": "shh_newMessageFilter",
+		"params":[{
+			"privateKeyID": "` + user1KeyHex + `",
+			"topics": ["0x77686973"]
+		}]
+	}`)
+
+	var filterRes jsonrpcMessage
+	err = json.Unmarshal([]byte(filterMsgRes), &filterRes)
+	require.NoError(err)
+	require.Nil(filterRes.Error)
+
+	message := `{
+		"id": 3,
+		"jsonrpc": "2.0",
+		"method": "shh_post",
+		"params": [{
+			"from": "` + user1KeyHex + `",
+			"to": "` + user2KeyHex + `",
+			"symKeyID": ` + string(symKeyRes.Result) + `,
+			"topics": ["0x77686973"],
+			"payload": "0x776869737065722d636861742d636c69656e74",
+			"priority": 1,
+			"ttl": 20 
+		}]
+	}`
+
+	fmt.Printf("Delivering message to User(%q): %+s\n", user1Address, message)
+
+	var messageDelr jsonrpcMessage
+	messageResponse := client.CallRaw(message)
+	err = json.Unmarshal([]byte(symKey), &messageDelr)
+	require.NoError(err)
+	require.Nil(messageDelr.Error)
+
+	fmt.Printf("MessageDeliveryResponse: %+q\n", messageResponse)
+}
 
 func (s *BackendTestSuite) TestAccountsList() {
 	require := s.Require()
