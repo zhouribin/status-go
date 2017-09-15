@@ -46,8 +46,9 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 	require.NoError(err)
 	require.NotNil(nodeConfig)
 
-	// whisperService := s.backend.WhisperService()
-	// require.NotNil(whisperService)
+	whisperService, err := s.backend.NodeManager().WhisperService()
+	require.NoError(err)
+	require.NotNil(whisperService)
 	// whisperAPI := whisper.NewPublicWhisperAPI(whisperService)
 
 	var lesService *les.LightEthereum
@@ -73,9 +74,21 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 	err = s.backend.AccountManager().SelectAccount(user1Address, TestConfig.Account1.Password)
 	require.NoError(err, "account selection failed")
 
+	selectedAcct1, err := s.backend.AccountManager().SelectedAccount()
+	require.NoError(err, "account selection retrieval failed")
+	require.NotNil(selectedAcct1)
+	_, err = whisperService.AddKeyPair(selectedAcct1.AccountKey.PrivateKey)
+	require.NoError(err, fmt.Sprintf("identity not injected: %v", user1KeyHex))
+
 	// select user2 account
 	err = s.backend.AccountManager().SelectAccount(user2Address, TestConfig.Account2.Password)
 	require.NoError(err, "account selection failed")
+
+	selectedAcct2, err := s.backend.AccountManager().SelectedAccount()
+	require.NoError(err, "account selection retrieval failed")
+	require.NotNil(selectedAcct2)
+	_, err = whisperService.AddKeyPair(selectedAcct2.AccountKey.PrivateKey)
+	require.NoError(err, fmt.Sprintf("identity not injected: %v", user2KeyHex))
 
 	// at this point user2 should show up
 	accounts = lesService.StatusBackend.AccountManager().Accounts()
@@ -94,7 +107,7 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 	})
 
 	symKey := client.CallRaw(`{
-		"id": 1,
+		"id": 10,
 		"jsonrpc": "2.0",
 		"method": "shh_newSymKey",
 		"params":[]
@@ -106,11 +119,12 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 	require.Nil(symKeyRes.Error)
 
 	filterMsgRes := client.CallRaw(`{
-		"id": 2,
+		"id": 12,
 		"jsonrpc": "2.0",
 		"method": "shh_newMessageFilter",
 		"params":[{
-			"privateKeyID": "` + user1KeyHex + `",
+			"sig": "` + user1KeyHex + `",
+			"privateKeyID": "` + user2KeyHex + `",
 			"topics": ["0x77686973"]
 		}]
 	}`)
@@ -121,17 +135,18 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 	require.Nil(filterRes.Error)
 
 	message := `{
-		"id": 3,
+		"id": 14,
 		"jsonrpc": "2.0",
 		"method": "shh_post",
 		"params": [{
-			"from": "` + user1KeyHex + `",
-			"to": "` + user2KeyHex + `",
-			"symKeyID": ` + string(symKeyRes.Result) + `,
+			"sig": "` + user1KeyHex + `",
+			"pubKey": "` + user2KeyHex + `",
 			"topics": ["0x77686973"],
 			"payload": "0x776869737065722d636861742d636c69656e74",
 			"priority": 1,
-			"ttl": 20 
+			"ttl": 20,
+			"powTarget": 0.01,
+			"powTime": 20 
 		}]
 	}`
 
