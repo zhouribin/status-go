@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	gethcommon "github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/les"
 	"github.com/status-im/status-go/geth/common"
 	"github.com/status-im/status-go/geth/node"
@@ -56,15 +57,15 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 	require.NotNil(lesService)
 
 	// create an account
-	user1Address, user1Key, _, err := s.backend.AccountManager().CreateAccount(TestConfig.Account1.Password)
+	user1Address, _, _, err := s.backend.AccountManager().CreateAccount(TestConfig.Account1.Password)
 	require.NoError(err)
 
 	// create an account
-	user2Address, user2Key, _, err := s.backend.AccountManager().CreateAccount(TestConfig.Account2.Password)
+	user2Address, _, _, err := s.backend.AccountManager().CreateAccount(TestConfig.Account2.Password)
 	require.NoError(err)
 
-	user1KeyHex := gethcommon.ToHex([]byte(user1Key))
-	user2KeyHex := gethcommon.ToHex([]byte(user2Key))
+	// user1KeyHex := gethcommon.ToHex([]byte(user1Key))
+	// user2KeyHex := gethcommon.ToHex([]byte(user2Key))
 
 	// ensure that there is still no accounts returned
 	accounts := lesService.StatusBackend.AccountManager().Accounts()
@@ -77,6 +78,7 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 	selectedAcct1, err := s.backend.AccountManager().SelectedAccount()
 	require.NoError(err, "account selection retrieval failed")
 	require.NotNil(selectedAcct1)
+	user1KeyHex := gethcommon.ToHex(crypto.FromECDSAPub(&selectedAcct1.AccountKey.PrivateKey.PublicKey))
 	_, err = whisperService.AddKeyPair(selectedAcct1.AccountKey.PrivateKey)
 	require.NoError(err, fmt.Sprintf("identity not injected: %v", user1KeyHex))
 
@@ -87,6 +89,7 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 	selectedAcct2, err := s.backend.AccountManager().SelectedAccount()
 	require.NoError(err, "account selection retrieval failed")
 	require.NotNil(selectedAcct2)
+	user2KeyHex := gethcommon.ToHex(crypto.FromECDSAPub(&selectedAcct2.AccountKey.PrivateKey.PublicKey))
 	_, err = whisperService.AddKeyPair(selectedAcct2.AccountKey.PrivateKey)
 	require.NoError(err, fmt.Sprintf("identity not injected: %v", user2KeyHex))
 
@@ -106,8 +109,27 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 		fmt.Printf("Notification: %#v\n", envelope)
 	})
 
-	symKey := client.CallRaw(`{
+	hasKeyFormat := (`{
 		"id": 10,
+		"jsonrpc": "2.0",
+		"method": "shh_hasKeyPair",
+		"params":[%q]
+	}`)
+
+	var user1HasKey jsonrpcMessage
+	userOneHasKey := client.CallRaw(fmt.Sprintf(hasKeyFormat, user1KeyHex))
+	err = json.Unmarshal([]byte(userOneHasKey), &user1HasKey)
+	require.NoError(err)
+	require.Nil(user1HasKey.Error)
+
+	var user2HasKey jsonrpcMessage
+	userTwoHasKey := client.CallRaw(fmt.Sprintf(hasKeyFormat, user2KeyHex))
+	err = json.Unmarshal([]byte(userTwoHasKey), &user2HasKey)
+	require.NoError(err)
+	require.Nil(user2HasKey.Error)
+
+	symKey := client.CallRaw(`{
+		"id": 11,
 		"jsonrpc": "2.0",
 		"method": "shh_newSymKey",
 		"params":[]
@@ -141,7 +163,7 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 		"params": [{
 			"sig": "` + user1KeyHex + `",
 			"pubKey": "` + user2KeyHex + `",
-			"topics": ["0x77686973"],
+			"topics": "0x77686973",
 			"payload": "0x776869737065722d636861742d636c69656e74",
 			"priority": 1,
 			"ttl": 20,
