@@ -1,6 +1,7 @@
 package api_test
 
 import (
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -8,6 +9,7 @@ import (
 	gethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/les"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"github.com/status-im/status-go/geth/common"
 	"github.com/status-im/status-go/geth/node"
 	"github.com/status-im/status-go/geth/params"
@@ -50,53 +52,35 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 	whisperService, err := s.backend.NodeManager().WhisperService()
 	require.NoError(err)
 	require.NotNil(whisperService)
-	// whisperAPI := whisper.NewPublicWhisperAPI(whisperService)
+	whisperAPI := whisper.NewPublicWhisperAPI(whisperService)
 
 	var lesService *les.LightEthereum
 	require.NoError(runningNode.Service(&lesService))
 	require.NotNil(lesService)
 
-	// create an account
-	user1Address, _, _, err := s.backend.AccountManager().CreateAccount(TestConfig.Account1.Password)
-	require.NoError(err)
-
-	// create an account
-	user2Address, _, _, err := s.backend.AccountManager().CreateAccount(TestConfig.Account2.Password)
-	require.NoError(err)
-
-	// user1KeyHex := gethcommon.ToHex([]byte(user1Key))
-	// user2KeyHex := gethcommon.ToHex([]byte(user2Key))
+	accountManager := s.backend.AccountManager()
 
 	// ensure that there is still no accounts returned
 	accounts := lesService.StatusBackend.AccountManager().Accounts()
 	require.Zero(len(accounts), "accounts returned, while there should be none (we haven't logged in yet)")
 
-	// select user 1 account
-	err = s.backend.AccountManager().SelectAccount(user1Address, TestConfig.Account1.Password)
-	require.NoError(err, "account selection failed")
+	// account1
+	_, selectedAcct1, err := accountManager.AddressToDecryptedAccount(TestConfig.Account1.Address, TestConfig.Account1.Password)
+	require.NoError(err)
+	user1KeySign := crypto.FromECDSAPub(&selectedAcct1.PrivateKey.PublicKey)
+	user1KeyHex := gethcommon.ToHex(user1KeySign)
+	_, user1Err := whisperService.AddKeyPair(selectedAcct1.PrivateKey)
+	require.NoError(user1Err, fmt.Sprintf("user1 identity not injected: %v", user1KeyHex))
+	require.True(whisperAPI.HasKeyPair(context.Background(), user1KeyHex), "Should have user 1 id")
 
-	selectedAcct1, err := s.backend.AccountManager().SelectedAccount()
-	require.NoError(err, "account selection retrieval failed")
-	require.NotNil(selectedAcct1)
-	user1KeyHex := gethcommon.ToHex(crypto.FromECDSAPub(&selectedAcct1.AccountKey.PrivateKey.PublicKey))
-	_, err = whisperService.AddKeyPair(selectedAcct1.AccountKey.PrivateKey)
-	require.NoError(err, fmt.Sprintf("identity not injected: %v", user1KeyHex))
-
-	// select user2 account
-	err = s.backend.AccountManager().SelectAccount(user2Address, TestConfig.Account2.Password)
-	require.NoError(err, "account selection failed")
-
-	selectedAcct2, err := s.backend.AccountManager().SelectedAccount()
-	require.NoError(err, "account selection retrieval failed")
-	require.NotNil(selectedAcct2)
-	user2KeyHex := gethcommon.ToHex(crypto.FromECDSAPub(&selectedAcct2.AccountKey.PrivateKey.PublicKey))
-	_, err = whisperService.AddKeyPair(selectedAcct2.AccountKey.PrivateKey)
-	require.NoError(err, fmt.Sprintf("identity not injected: %v", user2KeyHex))
-
-	// at this point user2 should show up
-	accounts = lesService.StatusBackend.AccountManager().Accounts()
-	require.Equal(1, len(accounts), "exactly one accounts is expected (1 main account)")
-	require.Equal(string(accounts[0].Hex()), "0x"+user2Address)
+	// account2
+	_, selectedAcct2, err := accountManager.AddressToDecryptedAccount(TestConfig.Account2.Address, TestConfig.Account2.Password)
+	require.NoError(err)
+	user2KeySign := crypto.FromECDSAPub(&selectedAcct2.PrivateKey.PublicKey)
+	user2KeyHex := gethcommon.ToHex(user2KeySign)
+	_, user2Err := whisperService.AddKeyPair(selectedAcct2.PrivateKey)
+	require.NoError(user2Err, fmt.Sprintf("user2 identity not injected: %v", user1KeyHex))
+	require.True(whisperAPI.HasKeyPair(context.Background(), user2KeyHex), "Should have user 2 id")
 
 	client, err := rpc.NewClient(runningNode, nodeConfig.UpstreamConfig)
 	require.NoError(err)
@@ -109,53 +93,6 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 		fmt.Printf("Notification: %#v\n", envelope)
 	})
 
-	hasKeyFormat := (`{
-		"id": 10,
-		"jsonrpc": "2.0",
-		"method": "shh_hasKeyPair",
-		"params":[%q]
-	}`)
-
-	var user1HasKey jsonrpcMessage
-	userOneHasKey := client.CallRaw(fmt.Sprintf(hasKeyFormat, user1KeyHex))
-	err = json.Unmarshal([]byte(userOneHasKey), &user1HasKey)
-	require.NoError(err)
-	require.Nil(user1HasKey.Error)
-
-	var user2HasKey jsonrpcMessage
-	userTwoHasKey := client.CallRaw(fmt.Sprintf(hasKeyFormat, user2KeyHex))
-	err = json.Unmarshal([]byte(userTwoHasKey), &user2HasKey)
-	require.NoError(err)
-	require.Nil(user2HasKey.Error)
-
-	symKey := client.CallRaw(`{
-		"id": 11,
-		"jsonrpc": "2.0",
-		"method": "shh_newSymKey",
-		"params":[]
-	}`)
-
-	var symKeyRes jsonrpcMessage
-	err = json.Unmarshal([]byte(symKey), &symKeyRes)
-	require.NoError(err)
-	require.Nil(symKeyRes.Error)
-
-	filterMsgRes := client.CallRaw(`{
-		"id": 12,
-		"jsonrpc": "2.0",
-		"method": "shh_newMessageFilter",
-		"params":[{
-			"sig": "` + user1KeyHex + `",
-			"privateKeyID": "` + user2KeyHex + `",
-			"topics": ["0x77686973"]
-		}]
-	}`)
-
-	var filterRes jsonrpcMessage
-	err = json.Unmarshal([]byte(filterMsgRes), &filterRes)
-	require.NoError(err)
-	require.Nil(filterRes.Error)
-
 	message := `{
 		"id": 14,
 		"jsonrpc": "2.0",
@@ -166,20 +103,34 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 			"topics": "0x77686973",
 			"payload": "0x776869737065722d636861742d636c69656e74",
 			"priority": 1,
-			"ttl": 20,
+			"ttl": 50,
 			"powTarget": 0.01,
 			"powTime": 20 
 		}]
 	}`
 
-	fmt.Printf("Delivering message to User(%q): %+s\n", user1Address, message)
+	fmt.Printf("Delivering message to User(%q): %+s\n", TestConfig.Account1.Address, message)
 
 	var messageDelr jsonrpcMessage
 	messageResponse := client.CallRaw(message)
-	fmt.Printf("MessageDeliveryResponse: %+q\n", messageResponse)
 	err = json.Unmarshal([]byte(messageResponse), &messageDelr)
 	require.NoError(err)
 	require.Nil(messageDelr.Error)
+
+	// // Validate we have message in whisper api.
+	// whisperMsgs := whisperService.Messages(filterID)
+	// require.Len(whisperMsgs, 1, "Should have 1 pending messages")
+
+	// sub, err := whisperAPI.Messages(context.Background(), whisper.Criteria{
+	// 	Sig:          []byte(user1KeySign),
+	// 	PrivateKeyID: user2KeyHex,
+	// 	Topics: []whisper.TopicType{
+	// 		whisper.BytesToTopic([]byte("0x77686973")),
+	// 	},
+	// })
+	// require.NoError(err, "new subscription filter encountered error")
+	// require.NotNil(sub, "subscription filter should not be empty")
+
 }
 
 func (s *BackendTestSuite) TestAccountsList() {

@@ -704,8 +704,9 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 	wh.poolMu.Unlock()
 
 	if alreadyCached {
-		log.Trace("whisper envelope already cached", "hash", envelope.Hash().Hex())
+		log.Info("whisper envelope already cached", "hash", envelope.Hash().Hex())
 	} else {
+		log.Info("whisper envelope added to cache", "hash", envelope.Hash().Hex())
 		log.Trace("cached whisper envelope", "hash", envelope.Hash().Hex())
 		wh.statsMu.Lock()
 		wh.stats.memoryUsed += envelope.size()
