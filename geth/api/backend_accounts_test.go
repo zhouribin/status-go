@@ -176,11 +176,10 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 
 	var messageDelr jsonrpcMessage
 	messageResponse := client.CallRaw(message)
-	err = json.Unmarshal([]byte(symKey), &messageDelr)
+	fmt.Printf("MessageDeliveryResponse: %+q\n", messageResponse)
+	err = json.Unmarshal([]byte(messageResponse), &messageDelr)
 	require.NoError(err)
 	require.Nil(messageDelr.Error)
-
-	fmt.Printf("MessageDeliveryResponse: %+q\n", messageResponse)
 }
 
 func (s *BackendTestSuite) TestAccountsList() {
