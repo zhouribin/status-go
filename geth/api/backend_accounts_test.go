@@ -93,6 +93,17 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 		fmt.Printf("Notification: %#v\n", envelope)
 	})
 
+	// // setup filter
+	// filterID, err := whisperAPI.NewMessageFilter(whisper.Criteria{
+	// 	Sig:          []byte(user1KeySign),
+	// 	PrivateKeyID: user2KeyHex,
+	// 	Topics: []whisper.TopicType{
+	// 		whisper.BytesToTopic([]byte("0x77686973")),
+	// 	},
+	// })
+	// require.NoError(err, "new filter encountered error")
+	// require.NotEmpty(filterID, "subscription filter id should not be empty")
+
 	message := `{
 		"id": 14,
 		"jsonrpc": "2.0",
