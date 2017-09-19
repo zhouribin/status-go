@@ -93,16 +93,16 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 		fmt.Printf("Notification: %#v\n", envelope)
 	})
 
-	// // setup filter
-	// filterID, err := whisperAPI.NewMessageFilter(whisper.Criteria{
-	// 	Sig:          []byte(user1KeySign),
-	// 	PrivateKeyID: user2KeyHex,
-	// 	Topics: []whisper.TopicType{
-	// 		whisper.BytesToTopic([]byte("0x77686973")),
-	// 	},
-	// })
-	// require.NoError(err, "new filter encountered error")
-	// require.NotEmpty(filterID, "subscription filter id should not be empty")
+	// setup filter
+	filterID, err := whisperAPI.NewMessageFilter(whisper.Criteria{
+		Sig:          []byte(user1KeySign),
+		PrivateKeyID: user2KeyHex,
+		Topics: []whisper.TopicType{
+			whisper.BytesToTopic([]byte("0x77686973")),
+		},
+	})
+	require.NoError(err, "new filter encountered error")
+	require.NotEmpty(filterID, "subscription filter id should not be empty")
 
 	message := `{
 		"id": 14,
@@ -120,28 +120,28 @@ func (s *BackendTestSuite) TestTwoAccountMessages() {
 		}]
 	}`
 
-	fmt.Printf("Delivering message to User(%q): %+s\n", TestConfig.Account1.Address, message)
-
 	var messageDelr jsonrpcMessage
 	messageResponse := client.CallRaw(message)
 	err = json.Unmarshal([]byte(messageResponse), &messageDelr)
 	require.NoError(err)
 	require.Nil(messageDelr.Error)
 
-	// // Validate we have message in whisper api.
-	// whisperMsgs := whisperService.Messages(filterID)
-	// require.Len(whisperMsgs, 1, "Should have 1 pending messages")
+	// Validate we have message in whisper api.
+	whisperMsgs := whisperService.Messages(filterID)
+	require.Len(whisperMsgs, 1, "Should have 1 pending messages")
 
-	// sub, err := whisperAPI.Messages(context.Background(), whisper.Criteria{
-	// 	Sig:          []byte(user1KeySign),
-	// 	PrivateKeyID: user2KeyHex,
-	// 	Topics: []whisper.TopicType{
-	// 		whisper.BytesToTopic([]byte("0x77686973")),
-	// 	},
-	// })
-	// require.NoError(err, "new subscription filter encountered error")
-	// require.NotNil(sub, "subscription filter should not be empty")
+	recmessage := `{
+		"id": 15,
+		"jsonrpc": "2.0",
+		"method": "shh_getFilterMessages",
+		"params": ["` + filterID + `"]
+	}`
 
+	var messageRec jsonrpcMessage
+	recResponse := client.CallRaw(recmessage)
+	err = json.Unmarshal([]byte(recResponse), &messageRec)
+	require.NoError(err)
+	require.Nil(messageRec.Error)
 }
 
 func (s *BackendTestSuite) TestAccountsList() {
