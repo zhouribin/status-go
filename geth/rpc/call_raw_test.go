@@ -5,7 +5,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/stretchr/testify/require"
+	. "github.com/smartystreets/goconvey/convey"
 )
 
 func TestNewSuccessResponse(t *testing.T) {
@@ -22,32 +22,37 @@ func TestNewSuccessResponse(t *testing.T) {
 		{"null_nil", nil, json.RawMessage(`7`), `{"jsonrpc":"2.0","id":7,"result":null}`},
 	}
 
-	for _, test := range cases {
-		t.Run(test.name, func(t *testing.T) {
-			got := newSuccessResponse(test.result, test.id)
-			require.Equal(t, test.expected, got)
-		})
-	}
+	Convey("Success JSON-RPC response should be correct", t, func() {
+		for _, test := range cases {
+			Convey(test.name, func() {
+				got := newSuccessResponse(test.result, test.id)
+				So(got, ShouldEqual, test.expected)
+			})
+		}
+	})
 }
 
 func TestNewErrorResponse(t *testing.T) {
-	got := newErrorResponse(-32601, errors.New("Method not found"), json.RawMessage(`42`))
-
-	expected := `{"jsonrpc":"2.0","id":42,"error":{"code":-32601,"message":"Method not found"}}`
-	require.Equal(t, expected, got)
+	Convey("Error JSON-RPC response should be correct", t, func() {
+		got := newErrorResponse(-32601, errors.New("Method not found"), json.RawMessage(`42`))
+		expected := `{"jsonrpc":"2.0","id":42,"error":{"code":-32601,"message":"Method not found"}}`
+		So(got, ShouldEqual, expected)
+	})
 }
 
 func TestUnmarshalMessage(t *testing.T) {
-	body := json.RawMessage(`{"jsonrpc": "2.0", "method": "subtract", "params": {"subtrahend": 23, "minuend": 42}}`)
-	got, err := unmarshalMessage(body)
-	require.NoError(t, err)
+	Convey("Unmarshalling JSON-RPC message should work", t, func() {
+		body := json.RawMessage(`{"jsonrpc": "2.0", "method": "subtract", "params": {"subtrahend": 23, "minuend": 42}}`)
+		got, err := unmarshalMessage(body)
+		So(err, ShouldBeNil)
 
-	expected := &jsonrpcMessage{
-		Version: "2.0",
-		Method:  "subtract",
-		Params:  json.RawMessage(`{"subtrahend": 23, "minuend": 42}`),
-	}
-	require.Equal(t, expected, got)
+		expected := &jsonrpcMessage{
+			Version: "2.0",
+			Method:  "subtract",
+			Params:  json.RawMessage(`{"subtrahend": 23, "minuend": 42}`),
+		}
+		So(got, ShouldResemble, expected)
+	})
 }
 
 func TestMethodAndParamsFromBody(t *testing.T) {
@@ -114,19 +119,21 @@ func TestMethodAndParamsFromBody(t *testing.T) {
 		},
 	}
 
-	for _, test := range cases {
-		t.Run(test.name, func(t *testing.T) {
-			method, params, id, err := methodAndParamsFromBody(test.body)
-			if test.shouldFail {
-				require.Error(t, err)
-				return
-			}
-			require.NoError(t, err)
-			require.Equal(t, test.method, method)
-			require.Equal(t, test.params, params)
-			require.EqualValues(t, test.id, id)
-		})
-	}
+	Convey("Extracting method and params from body should work correctly", t, func() {
+		for _, test := range cases {
+			Convey(test.name, func() {
+				method, params, id, err := methodAndParamsFromBody(test.body)
+				if test.shouldFail {
+					So(err, ShouldBeError)
+					return
+				}
+				So(err, ShouldBeNil)
+				So(method, ShouldEqual, test.method)
+				So(params, ShouldResemble, test.params)
+				So(id, ShouldResemble, test.id)
+			})
+		}
+	})
 }
 
 func TestIsBatch(t *testing.T) {
@@ -139,10 +146,12 @@ func TestIsBatch(t *testing.T) {
 		{"array", json.RawMessage(`[{"jsonrpc":"2.0","id":44,"method":"shh_getFilterMessages","params":["3de6a8867aeb75be74d68478b853b4b0e063704d30f8231c45d0fcbd97af207e"]}]`), true},
 	}
 
-	for _, test := range cases {
-		t.Run(test.name, func(t *testing.T) {
-			got := isBatch(test.body)
-			require.Equal(t, test.expected, got)
-		})
-	}
+	Convey("Batch responses should be detected correctly", t, func() {
+		for _, test := range cases {
+			Convey(test.name, func() {
+				got := isBatch(test.body)
+				So(got, ShouldEqual, test.expected)
+			})
+		}
+	})
 }
