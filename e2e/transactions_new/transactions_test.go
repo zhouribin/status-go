@@ -17,6 +17,7 @@ import (
 )
 
 func TestSendEtherUsingRPC(t *testing.T) {
+	// Prepare backend and start a node once for all tests.
 	backend := api.NewStatusBackend()
 
 	nodeConfig, err := e2e.MakeTestNodeConfig(params.RopstenNetworkID)
@@ -41,6 +42,10 @@ func TestSendEtherUsingRPC(t *testing.T) {
 		t.Error(err)
 	}
 
+	// Make sure LES finished synchronization. Actually,
+	// this solves "no suitable peers" issue.
+	// This issue appears only when we try to ask for blockchain information
+	// before LES is synced.
 	for {
 		isSyncing := les.Downloader().Synchronising()
 		progress := les.Downloader().Progress()
@@ -52,6 +57,7 @@ func TestSendEtherUsingRPC(t *testing.T) {
 		time.Sleep(time.Second * 10)
 	}
 
+	// After finishing all tests, stop the node.
 	defer func() {
 		nodeStopped, err := backend.StopNode()
 		if err != nil {
@@ -61,6 +67,9 @@ func TestSendEtherUsingRPC(t *testing.T) {
 	}()
 
 	cv.Convey("Given a backend with a running node", t, func() {
+		// Notice c argument. It must be used in assertion in a closure passed to SetDefaultNodeNotificationHandler()
+		// as this closure is called in a goroutine.
+		// Without the explicit context, it panics.
 		cv.Convey("When a notification handler is defined and completes the transaction", func(c cv.C) {
 			txHash := gethcommon.Hash{}
 			transactionCompleted := make(chan error, 1)
@@ -79,7 +88,7 @@ func TestSendEtherUsingRPC(t *testing.T) {
 				txHash, err = backend.CompleteTransaction(common.QueuedTxID(txID), TestConfig.Account1.Password)
 				transactionCompleted <- err
 
-				// clean up transaction if not completed properly
+				// Clean up transaction if not completed properly.
 				if err != nil {
 					err := backend.DiscardTransaction(common.QueuedTxID(txID))
 					c.So(err, cv.ShouldBeNil)
