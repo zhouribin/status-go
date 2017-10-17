@@ -341,3 +341,28 @@ func (s *JailRPCTestSuite) TestJailVMPersistence() {
 	s.T().Log(total)
 	s.InDelta(0.840003, total, 0.0000001)
 }
+
+// TestEthAccounts tests that 'web3.eth.accounts' returns correct address.
+// Related to possibly regression bug in https://github.com/status-im/status-go/issues/384
+func (s *JailRPCTestSuite) TestEthAccounts() {
+	s.StartTestBackend(params.RopstenNetworkID)
+	defer s.StopTestBackend()
+
+	err := s.Backend.AccountManager().SelectAccount(TestConfig.Account1.Address, TestConfig.Account1.Password)
+	s.NoError(err)
+	accounts, err := s.Backend.AccountManager().Accounts()
+	s.NoError(err)
+	s.Len(accounts, 1)
+
+	s.jail.Parse(testChatID, "")
+
+	cell, err := s.jail.Cell(testChatID)
+	s.NoError(err)
+
+	resp, err := cell.Run(`web3.eth.accounts[0]`)
+	s.NoError(err)
+
+	s.True(resp.IsString())
+	// TODO(divan): check if returned account string should be in EIP55
+	s.Equal(strings.ToLower(TestConfig.Account1.Address), resp.String())
+}
