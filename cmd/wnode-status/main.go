@@ -14,7 +14,7 @@ var (
 	nodeKeyFile = flag.String("nodekey", "", "P2P node key file (private key)")
 	dataDir     = flag.String("datadir", "wnode-status-data", "Data directory for the databases and keystore")
 	networkID   = flag.Int("networkid", params.RopstenNetworkID, "Network identifier (integer, 1=Homestead, 3=Ropsten, 4=Rinkeby)")
-	httpEnabled = flag.Bool("http", false, "HTTP RPC enpoint enabled (default: false)")
+	httpEnabled = flag.Bool("http", true, "HTTP RPC enpoint enabled (default: true)")
 	httpPort    = flag.Int("httpport", params.HTTPPort, "HTTP RPC server's listening port")
 	ipcEnabled  = flag.Bool("ipc", false, "IPC RPC enpoint enabled")
 

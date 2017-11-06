@@ -8,6 +8,9 @@
 /cmd/statusd/statusd-data
 /cmd/statusd/statusd
 
+/app1
+/app2
+/wnode1
 /wnode-status-data
 /cmd/wnode-status/wnode-status-data
 /cmd/wnode-status/wnode-status

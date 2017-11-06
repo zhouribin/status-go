@@ -51,7 +51,7 @@ describe('Whisper Tests', function () {
 
         it('shh.version()', function () {
             var version = node1.shh.version();
-            assert.equal(version, '0x5', 'Whisper version does not match');
+            assert.equal(version, '5.0', 'Whisper version does not match');
         });
 
         it('shh.info()', function () {
@@ -65,41 +65,41 @@ describe('Whisper Tests', function () {
             var keyId = ''; // symmetric key ID (to be populated)
             var keyVal = ''; // symmetric key value (to be populated)
 
-            it('shh.generateSymmetricKey()', function () {
-                keyId = node1.shh.generateSymmetricKey();
+            it('shh.newSymKey()', function () {
+                keyId = node1.shh.newSymKey();
                 assert.lengthOf(keyId, 64, 'invalid keyId length');
             });
 
-            it('shh.getSymmetricKey(keyId)', function () {
-                keyVal = node1.shh.getSymmetricKey(keyId);
+            it('shh.getSymKey(keyId)', function () {
+                keyVal = node1.shh.getSymKey(keyId);
                 assert.lengthOf(keyVal, 66, 'invalid key value length'); // 2 bytes for "0x"
             });
 
-            it('shh.hasSymmetricKey(keyId)', function () {
-                expect(node1.shh.hasSymmetricKey(keyId)).to.equal(true);
+            it('shh.hasSymKey(keyId)', function () {
+                expect(node1.shh.hasSymKey(keyId)).to.equal(true);
             });
 
-            it('shh.deleteSymmetricKey(keyId)', function () {
-                expect(node1.shh.hasSymmetricKey(keyId)).to.equal(true);
-                node1.shh.deleteSymmetricKey(keyId);
-                expect(node1.shh.hasSymmetricKey(keyId)).to.equal(false);
+            it('shh.deleteSymKey(keyId)', function () {
+                expect(node1.shh.hasSymKey(keyId)).to.equal(true);
+                node1.shh.deleteSymKey(keyId);
+                expect(node1.shh.hasSymKey(keyId)).to.equal(false);
             });
 
             it('shh.addSymmetricKeyDirect(keyVal)', function () {
                 keyIdOriginal = keyId;
-                keyId = node1.shh.addSymmetricKeyDirect(keyVal);
+                keyId = node1.shh.addSymKey(keyVal);
                 assert.notEqual(keyId, keyIdOriginal);
                 assert.lengthOf(keyId, 64, 'invalid keyId length');
-                expect(node1.shh.hasSymmetricKey(keyId)).to.equal(true);
+                expect(node1.shh.hasSymKey(keyId)).to.equal(true);
             });
 
-            it('shh.addSymmetricKeyFromPassword(password)', function () {
+            it('shh.generateSymKeyFromPassword(password)', function () {
                 var password = 'foobar';
-                var keyId = node1.shh.addSymmetricKeyFromPassword(password);
-                var keyVal = node1.shh.getSymmetricKey(keyId);
+                var keyId = node1.shh.generateSymKeyFromPassword(password);
+                var keyVal = node1.shh.getSymKey(keyId);
 
                 assert.lengthOf(keyId, 64, 'invalid keyId length');
-                expect(node1.shh.hasSymmetricKey(keyId)).to.equal(true);
+                expect(node1.shh.hasSymKey(keyId)).to.equal(true);
                 assert.equal(keyVal, '0xa582720d74d463589df14c11538189a1c07778c47e86f70bab7b5ba27e2de3cc');
             });
         });
@@ -165,7 +165,7 @@ describe('Whisper Tests', function () {
 
             var filterid1 = ''; // sym filter, to be populated
             var filterid2 = ''; // asym filter, to be populated
-            var keyId = ''; // symkey, to be populated
+            var keyId = node1.shh.newKeyPair();
             var uniqueTopic = makeTopic();
 
             var payloadBeforeSymFilter = 'sent before filter was active (symmetric)';
@@ -174,37 +174,43 @@ describe('Whisper Tests', function () {
             var payloadAfterAsymFilter = 'sent after filter was active (asymmetric)';
 
             it('shh.subscribe(filterParams) - symmetric filter', function () {
-                keyId = node1.shh.generateSymmetricKey();
+                keyId = node1.shh.newSymKey();
                 assert.lengthOf(keyId, 64);
 
                 // send message, which will be floating around *before* filter is even created
                 var message = {
-                    type: "sym",
-                    key: keyId,
+                    symKeyID: keyId,
                     topic: uniqueTopic,
-                    payload: payloadBeforeSymFilter
+                    payload: web3.fromAscii(payloadBeforeSymFilter),
+                    powTarget: 0.001,
+                    powTime: 2
                 };
-                expect(node1.shh.post(message)).to.equal(null);
+
+                console.log(message);
+                expect(node1.shh.post(message)).to.equal(true);
 
                 // symmetric filter
-                filterid1 = node1.shh.subscribe({
-                    type: "sym",
-                    key: keyId,
-                    sig: identity1,
+                filterid1 = node1.shh.newMessageFilter({
+                    symKeyID: keyId,
                     topics: [topic1, topic2, uniqueTopic]
+                }, function () {
+                    assert.lengthOf(filterid1.filterId, 64);
                 });
-                assert.lengthOf(filterid1, 64);
+
             });
 
             it('shh.subscribe(filterParams) - asymmetric filter', function () {
                 // send message, which will be floating around *before* filter is even created
+                console.log("########", keyId);
                 var message = {
-                    type: "asym",
-                    key: identity2,
+                    pubKey: node1.shh.getPublicKey(keyId),
                     topic: uniqueTopic,
-                    payload: payloadBeforeAsymFilter
+                    payload: web3.fromAscii(payloadBeforeAsymFilter),
+                    powTarget: 0.001,
+                    powTime: 2
                 };
-                expect(node1.shh.post(message)).to.equal(null);
+
+                expect(node1.shh.post(message)).to.equal(true);
 
                 // asymmetric filter
                 filterid2 = node1.shh.subscribe({
@@ -307,13 +313,13 @@ describe('Whisper Tests', function () {
         });
 
         it('ensure symkey exists', function () {
-            keyId = node1.shh.generateSymmetricKey();
+            keyId = node1.shh.newKeyPair();
             assert.lengthOf(keyId, 64);
-            expect(node1.shh.hasSymmetricKey(keyId)).to.equal(true);
+            expect(node1.shh.hasSymKey(keyId)).to.equal(true);
         });
 
         it('read the generated symkey', function () {
-            keyVal = node1.shh.getSymmetricKey(keyId);
+            keyVal = node1.shh.getSymKey(keyId);
             assert.lengthOf(keyVal, 66); // 2 bytes for "0x"
         });
 
@@ -400,18 +406,18 @@ describe('Whisper Tests', function () {
         });
 
         it('ensure symkey exists', function () {
-            keyId1 = node1.shh.generateSymmetricKey();
+            keyId1 = node1.shh.newKeyPair();
             assert.lengthOf(keyId1, 64);
-            expect(node1.shh.hasSymmetricKey(keyId1)).to.equal(true);
+            expect(node1.shh.hasSymKey(keyId1)).to.equal(true);
 
             // obtain key value
-            var keyVal = node1.shh.getSymmetricKey(keyId1);
+            var keyVal = node1.shh.getSymKey(keyId1);
             assert.lengthOf(keyVal, 66); // 2 bytes of "0x"
 
             // share the value with the node2
             keyId2 = node2.shh.addSymmetricKeyDirect(keyVal);
             assert.lengthOf(keyId2, 64);
-            expect(node2.shh.hasSymmetricKey(keyId2)).to.equal(true);
+            expect(node2.shh.hasSymKey(keyId2)).to.equal(true);
         });
 
         it('send symmetrically encrypted, signed message (node1 -> node2)', function (done) {
@@ -578,7 +584,7 @@ describe('Whisper Tests', function () {
                     // save subscription key
                     subscriptionKeyId = node1.shh.addSymmetricKeyDirect(payload.key);
                     assert.lengthOf(subscriptionKeyId, 64);
-                    expect(node1.shh.hasSymmetricKey(subscriptionKeyId)).to.equal(true);
+                    expect(node1.shh.hasSymKey(subscriptionKeyId)).to.equal(true);
 
                     done();
                 });
@@ -613,7 +619,7 @@ describe('Whisper Tests', function () {
                     // save subscription key
                     chatKeyId = node1.shh.addSymmetricKeyDirect(payload.key);
                     assert.lengthOf(chatKeyId, 64);
-                    expect(node1.shh.hasSymmetricKey(chatKeyId)).to.equal(true);
+                    expect(node1.shh.hasSymKey(chatKeyId)).to.equal(true);
 
                     done();
                 });
@@ -649,7 +655,7 @@ describe('Whisper Tests', function () {
             });
 
             it('share chat key, so that another device can send us notifications', function () {
-                var chatKey = node1.shh.getSymmetricKey(chatKeyId);
+                var chatKey = node1.shh.getSymKey(chatKeyId);
                 assert.lengthOf(chatKey, 66);
                 var message = {
                     type: "asym",
@@ -682,7 +688,7 @@ describe('Whisper Tests', function () {
                     // persist chat key
                     chatKeyId = node2.shh.addSymmetricKeyDirect(payload.key);
                     assert.lengthOf(chatKeyId, 64);
-                    expect(node2.shh.hasSymmetricKey(chatKeyId)).to.equal(true);
+                    expect(node2.shh.hasSymKey(chatKeyId)).to.equal(true);
 
                     done();
                 });

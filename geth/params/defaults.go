@@ -15,7 +15,7 @@ const (
 
 	// RPCEnabledDefault is the default state of whether the http rpc server is supposed
 	// to be started along with a node.
-	RPCEnabledDefault = false
+	RPCEnabledDefault = true
 
 	// HTTPHost is host interface for the HTTP RPC server
 	HTTPHost = "localhost"
