@@ -110,14 +110,14 @@ test-unit-coverage: ##@tests Run unit and integration tests with coverage
 test-e2e: ##@tests Run e2e tests
 	# order: reliability then alphabetical
 	# TODO(tiabc): make a single command out of them adding `-p 1` flag.
-	go test -timeout 5m ./e2e/accounts/... -network=$(networkid)
-	go test -timeout 5m ./e2e/api/... -network=$(networkid)
-	go test -timeout 5m ./e2e/node/... -network=$(networkid)
-	go test -timeout 15m ./e2e/jail/... -network=$(networkid)
-	go test -timeout 20m ./e2e/rpc/... -network=$(networkid)
-	go test -timeout 20m ./e2e/whisper/... -network=$(networkid)
-	go test -timeout 10m ./e2e/transactions/... -network=$(networkid)
-	go test -timeout 40m ./lib -network=$(networkid)
+	go test -v -timeout 5m ./e2e/accounts/... -network=$(networkid)
+	go test -v -timeout 5m ./e2e/api/... -network=$(networkid)
+	go test -v -timeout 5m ./e2e/node/... -network=$(networkid)
+	go test -v -timeout 15m ./e2e/jail/... -network=$(networkid)
+	go test -v -timeout 20m ./e2e/rpc/... -network=$(networkid)
+	go test -v -timeout 20m ./e2e/whisper/... -network=$(networkid)
+	go test -v -timeout 10m ./e2e/transactions/... -network=$(networkid)
+	go test -v -timeout 40m ./lib -network=$(networkid)
 
 ci: lint mock-install mock test-unit test-e2e ##@tests Run all linters and tests at once
 
