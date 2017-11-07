@@ -30,6 +30,7 @@ import (
 	"github.com/ethereum/go-ethereum/core/types"
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/rpc"
+	"runtime"
 )
 
 // Type determines the kind of filter and is used to put the filter in to
@@ -410,6 +411,12 @@ func (es *EventSystem) eventLoop() {
 		chainEvCh  = make(chan core.ChainEvent, chainEvChanSize)
 		chainEvSub = es.backend.SubscribeChainEvent(chainEvCh)
 	)
+
+	b:=make([]byte,15000)
+	if txSub==nil {
+		runtime.Stack(b,true)
+		fmt.Println(string(b))
+	}
 
 	// Unsubscribe all events
 	defer sub.Unsubscribe()
