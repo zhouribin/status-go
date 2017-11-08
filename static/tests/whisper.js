@@ -24,12 +24,16 @@ describe('Whisper Tests', function () {
 
     // watchFilter makes sure that we halt the filter on first message received
     var watchFilter = function (filter, done) {
+        console.log("watch");
         var messageReceived = false;
-        filter.watch(function (error, message) {
+        filter.watch(function (error) {
+            console.log("in watch");
             if (messageReceived)  return; // avoid double calling
             messageReceived = true; // no need to watch for the filter any more
             filter.stopWatching();
-            done(error, message);
+            console.log("in watch before done");
+            done(error);
+            console.log("in watch DONE");
         });
     };
 
@@ -166,6 +170,8 @@ describe('Whisper Tests', function () {
             var filterid1 = ''; // sym filter, to be populated
             var filterid2 = ''; // asym filter, to be populated
             var keyId = node1.shh.newKeyPair();
+            var symKey = node1.shh.newSymKey();
+            var asymKey = node1.shh.getPublicKey(keyId);
             var uniqueTopic = makeTopic();
 
             var payloadBeforeSymFilter = 'sent before filter was active (symmetric)';
@@ -173,37 +179,38 @@ describe('Whisper Tests', function () {
             var payloadBeforeAsymFilter = 'sent before filter was active (asymmetric)';
             var payloadAfterAsymFilter = 'sent after filter was active (asymmetric)';
 
-            it('shh.subscribe(filterParams) - symmetric filter', function () {
-                keyId = node1.shh.newSymKey();
-                assert.lengthOf(keyId, 64);
-
+            it('shh.subscribe(filterParams) - symmetric filter', function (done) {
                 // send message, which will be floating around *before* filter is even created
                 var message = {
-                    symKeyID: keyId,
+                    symKeyID: symKey,
                     topic: uniqueTopic,
                     payload: web3.fromAscii(payloadBeforeSymFilter),
                     powTarget: 0.001,
                     powTime: 2
                 };
 
-                console.log(message);
+                console.log("##############################################################", message, {
+                    symKeyID: symKey,
+                    topics: [topic1, topic2, uniqueTopic]
+                });
                 expect(node1.shh.post(message)).to.equal(true);
 
                 // symmetric filter
-                filterid1 = node1.shh.newMessageFilter({
-                    symKeyID: keyId,
+                var filterid1 = node1.shh.newMessageFilter({
+                    symKeyID: symKey,
                     topics: [topic1, topic2, uniqueTopic]
                 }, function () {
                     assert.lengthOf(filterid1.filterId, 64);
+                    done();
                 });
-
             });
 
-            it('shh.subscribe(filterParams) - asymmetric filter', function () {
+            it('shh.subscribe(filterParams) - asymmetric filter', function (done) {
+                this.timeout(60000);
+
                 // send message, which will be floating around *before* filter is even created
-                console.log("########", keyId);
                 var message = {
-                    pubKey: node1.shh.getPublicKey(keyId),
+                    pubKey: asymKey,
                     topic: uniqueTopic,
                     payload: web3.fromAscii(payloadBeforeAsymFilter),
                     powTarget: 0.001,
@@ -213,64 +220,101 @@ describe('Whisper Tests', function () {
                 expect(node1.shh.post(message)).to.equal(true);
 
                 // asymmetric filter
-                filterid2 = node1.shh.subscribe({
-                    type: "asym",
-                    key: identity2,
+                setTimeout(function () {
+                    filterid2 = node1.shh.newMessageFilter({
+                        pubKey: identity2,
+                        sig: identity1,
+                        topics: [topic1, topic2, uniqueTopic]
+                    }, function () {
+                        assert.lengthOf(filterid1.filterId, 64);
+                        done();
+                    });
+                }, 6000);
+            });
+
+            it('shh.getFilterMessages(filterID) - symmetric filter', function (done) {
+                // symmetric filter
+                filterid1 = node1.shh.newMessageFilter({
+                    symKeyID: keyId,
+                    topics: [topic1, topic2, uniqueTopic]
+                }, function () {
+                    // send message, after the filter has been already installed
+                    var message = {
+                        symKeyID: symKey,
+                        topic: uniqueTopic,
+                        payload: web3.fromAscii(payloadBeforeSymFilter),
+                        powTarget: 0.001,
+                        powTime: 2
+                    };
+                    expect(node1.shh.post(message)).to.equal(true);
+
+                    var messages = filterid1.implementation.poll(filterid1.filterId);
+                    assert.typeOf(messages, 'array');
+                    assert.lengthOf(messages, 1);
+                    assert.equal(web3.toAscii(messages[0].payload), payloadBeforeSymFilter);
+
+                    done();
+                });
+            });
+
+            it('shh.getFilterMessages(filterID) - asymmetric filter', function (done) {
+                // let's try to capture message that was there *before* filter is created
+                // asymmetric filter
+                filterid2 = node1.shh.newMessageFilter({
+                    pubKey: identity2,
                     sig: identity1,
                     topics: [topic1, topic2, uniqueTopic]
+                }, function () {
+                    // send message, after the filter has been already installed
+                    var message = {
+                        pubKey: asymKey,
+                        topic: uniqueTopic,
+                        payload: web3.fromAscii(payloadBeforeAsymFilter),
+                        powTarget: 0.001,
+                        powTime: 2
+                    };
+
+                    expect(node1.shh.post(message)).to.equal(true);
+
+                    var messages = node1.shh.getFilterMessages(filterid2);
+                    assert.typeOf(messages, 'array');
+                    assert.lengthOf(messages, 1);
+                    assert.equal(web3.toAscii(messages[0].payload), payloadBeforeAsymFilter);
+
+                    done();
                 });
-                assert.lengthOf(filterid1, 64);
-            });
-
-            it('shh.getFloatingMessages(filterID) - symmetric filter', function () {
-                // let's try to capture message that was there *before* filter is created
-                var messages = node1.shh.getFloatingMessages(filterid1);
-                assert.typeOf(messages, 'array');
-                assert.lengthOf(messages, 1);
-                assert.equal(web3.toAscii(messages[0].payload), payloadBeforeSymFilter);
-
-                // send message, after the filter has been already installed
-                var message = {
-                    type: "sym",
-                    key: keyId,
-                    topic: uniqueTopic,
-                    payload: payloadAfterSymFilter
-                };
-                expect(node1.shh.post(message)).to.equal(null);
-            });
-
-            it('shh.getFloatingMessages(filterID) - asymmetric filter', function () {
-                // let's try to capture message that was there *before* filter is created
-                var messages = node1.shh.getFloatingMessages(filterid2);
-                assert.typeOf(messages, 'array');
-                assert.lengthOf(messages, 1);
-                assert.equal(web3.toAscii(messages[0].payload), payloadBeforeAsymFilter);
-
-                // send message, after the filter has been already installed
-                var message = {
-                    type: "asym",
-                    key: identity2,
-                    topic: uniqueTopic,
-                    payload: payloadAfterAsymFilter
-                };
-                expect(node1.shh.post(message)).to.equal(null);
             });
 
             it('shh.getNewSubscriptionMessages(filterID) - symmetric filter', function (done) {
                 // allow some time for message to propagate
                 setTimeout(function () {
                     // now let's try to capture new messages from our last capture
-                    var messages = node1.shh.getNewSubscriptionMessages(filterid1);
-                    assert.typeOf(messages, 'array');
-                    assert.lengthOf(messages, 1);
-                    assert.equal(web3.toAscii(messages[0].payload), payloadAfterSymFilter);
+                    // symmetric filter
+                    filterid1 = node1.shh.newMessageFilter({
+                        symKeyID: keyId,
+                        topics: [topic1, topic2, uniqueTopic]
+                    }, function () {
+                        // send message, after the filter has been already installed
+                        var message = {
+                            symKeyID: symKey,
+                            topic: uniqueTopic,
+                            payload: web3.fromAscii(payloadBeforeSymFilter),
+                            powTarget: 0.001,
+                            powTime: 2
+                        };
+                        expect(node1.shh.post(message)).to.equal(true);
 
-                    // no more messages should be returned
-                    messages = node1.shh.getNewSubscriptionMessages(filterid1);
-                    assert.typeOf(messages, 'array');
-                    assert.lengthOf(messages, 0);
+                        var messages = filterid1.implementation.poll(filterid1.filterId);
+                        assert.typeOf(messages, 'array');
+                        assert.lengthOf(messages, 1);
+                        assert.equal(web3.toAscii(messages[0].payload), payloadBeforeSymFilter);
 
-                    done();
+                        var messages = filterid1.implementation.poll(filterid1.filterId);
+                        assert.typeOf(messages, 'array');
+                        assert.lengthOf(messages, 0);
+
+                        done();
+                    });
                 }, 200);
             });
 
@@ -278,30 +322,52 @@ describe('Whisper Tests', function () {
                 // allow some time for message to propagate
                 setTimeout(function () {
                     // now let's try to capture new messages from our last capture
-                    var messages = node1.shh.getNewSubscriptionMessages(filterid2);
-                    assert.typeOf(messages, 'array');
-                    assert.lengthOf(messages, 1);
-                    assert.equal(web3.toAscii(messages[0].payload), payloadAfterAsymFilter);
+                    filterid2 = node1.shh.newMessageFilter({
+                        pubKey: identity2,
+                        sig: identity1,
+                        topics: [topic1, topic2, uniqueTopic]
+                    }, function () {
+                        // send message, after the filter has been already installed
+                        var message = {
+                            pubKey: asymKey,
+                            topic: uniqueTopic,
+                            payload: web3.fromAscii(payloadBeforeAsymFilter),
+                            powTarget: 0.001,
+                            powTime: 2
+                        };
 
-                    // no more messages should be returned
-                    messages = node1.shh.getNewSubscriptionMessages(filterid2);
-                    assert.typeOf(messages, 'array');
-                    assert.lengthOf(messages, 0);
+                        expect(node1.shh.post(message)).to.equal(true);
 
-                    done();
+                        var messages = node1.shh.getFilterMessages(filterid2);
+                        assert.typeOf(messages, 'array');
+                        assert.lengthOf(messages, 1);
+                        assert.equal(web3.toAscii(messages[0].payload), payloadBeforeAsymFilter);
+
+                        var messages = node1.shh.getFilterMessages(filterid2);
+                        assert.typeOf(messages, 'array');
+                        assert.lengthOf(messages, 1);
+
+                        done();
+                    });
                 }, 200);
             });
 
-            it.skip('shh.unsubscribe(filterID)', function () {
-                node1.shh.unsubscribe(filterid1);
-                node1.shh.unsubscribe(filterid2);
+            it('filter.stopWatching()', function () {
+                filterid1.get(function() {
+                    console.log("FILTERS!!!!!!!!!!!!!!!!!!!", filterid1.filterId, filterid2.filterId);
+                    filterid1.stopWatching();
+                });
+                filterid2.get(function() {
+                    filterid2.stopWatching();
+                });
             });
         });
     });
 
-    context('symmetrically encrypted messages send/recieve', function () {
-        this.timeout(0);
+    context('symmetrically encrypted messages send/receive', function () {
+        this.timeout(60000);
 
+        var filter = ''; // filter (to be populated)
         var keyId = ''; // symmetric key ID (to be populated)
         var keyVal = ''; // symmetric key value (to be populated)
         var payload = 'here come the dragons';
@@ -313,7 +379,7 @@ describe('Whisper Tests', function () {
         });
 
         it('ensure symkey exists', function () {
-            keyId = node1.shh.newKeyPair();
+            keyId = node1.shh.newSymKey();
             assert.lengthOf(keyId, 64);
             expect(node1.shh.hasSymKey(keyId)).to.equal(true);
         });
@@ -324,28 +390,43 @@ describe('Whisper Tests', function () {
         });
 
         it('send/receive symmetrically encrypted message', function (done) {
-            // start watching for messages
-            watchFilter(node1.shh.filter({
-                type: "sym",
-                key: keyId,
-                sig: identity1,
-                topics: [topic1, topic2]
-            }), function (err, message) {
-                done(err);
-            });
+            setTimeout(function () {
+                // start watching for messages
+                filter = node1.shh.newMessageFilter({
+                    symKeyID: keyId,
+                    sig: identity1,
+                    topics: [topic1, topic2]
+                }, function () {
+                    var message = {
+                        symKeyID: keyId,
+                        sig: identity1,
+                        topic: topic1,
+                        payload: web3.fromAscii(payload),
+                        ttl: 20,
+                        powTime: 2,
+                        powTarget: 0.001
+                    };
+                    expect(node1.shh.post(message)).to.equal(true);
 
-            // send message
-            var message = {
-                type: "sym",
-                key: keyId,
-                sig: identity1,
-                topic: topic1,
-                payload: web3.fromAscii(payload),
-                ttl: 20,
-                powTime: 2,
-                powTarget: 0.001
-            };
-            expect(node1.shh.post(message)).to.equal(null);
+                    var messages = node1.shh.getFilterMessages(filter);
+                    assert.typeOf(messages, 'array');
+                    assert.lengthOf(messages, 1);
+                    assert.equal(web3.toAscii(messages[0].payload), payload);
+
+                    var messages = node1.shh.getFilterMessages(filter);
+                    assert.typeOf(messages, 'array');
+                    assert.lengthOf(messages, 1);
+
+                    /*
+                    watchFilter(filter, function (err) {
+                        console.log("__________________________________");
+                        done(err);
+                    });
+                    */
+                    console.log("DDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDDD");
+                    done();
+                });
+            }, 200000);
         });
 
         it('send the minimal symmetric message possible', function (done) {
@@ -356,7 +437,7 @@ describe('Whisper Tests', function () {
                 type: "sym",
                 key: keyId,
                 topics: [uniqueTopic]
-            }), function (err, message) {
+            }), function (err) {
                 done(err);
             });
 
@@ -429,7 +510,7 @@ describe('Whisper Tests', function () {
                 sig: identity1,
                 key: keyId2,
                 topics: [topic]
-            }), function (err, message) {
+            }), function (err) {
                 done(err);
             });
 
@@ -453,7 +534,7 @@ describe('Whisper Tests', function () {
                 type: "asym",
                 sig: identity1,
                 key: identity2
-            }), function (err, message) {
+            }), function (err) {
                 done(err);
             });
 

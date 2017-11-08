@@ -58,6 +58,8 @@ func main() {
 
 	// wait till node is started
 	<-started
+	log.Println(config)
+	log.Println(backend.NodeManager().Node())
 
 	if *injectAccounts {
 		if err := InjectTestAccounts(backend.NodeManager()); err != nil {
