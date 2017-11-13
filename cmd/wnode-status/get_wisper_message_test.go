@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"io"
 	"bytes"
+	"os"
+	"time"
 )
 /*
 {"jsonrpc": "2.0", "method": "shh_newSymKey", "params": [], "id": 9999999999}
@@ -33,6 +35,7 @@ type shhPost struct {
 	Payload string `json:"payload"`
 	PowTarget float32 `json:"powTarget"`
 	PowTime int `json:"powTime"`
+	TTL int `json:"TTL"`
 }
 type shhNewMessageFilter struct {
 	SymKeyId string `json:"symKeyID"`
@@ -69,7 +72,7 @@ func MakeRpcRequest(method string, params interface{}) RpcRequest {
 
 var c http.Client
 func TestGetWisperMessage(t *testing.T){
-
+	startLocalWhisperNode()
 	symkey,err:=createSymkey()
 	if err!=nil {
 		t.Fatal(err)
@@ -92,6 +95,11 @@ func TestGetWisperMessage(t *testing.T){
 	r,err:=getFilterMessages(msgFilterID)
 	t.Log(err,r)
 
+	_,err=postMessage(symkey)
+	if err!=nil {
+		t.Fatal(err)
+	}
+	time.Sleep(3*time.Second)
 	t.Log("get message 2")
 	r,err=getFilterMessages(msgFilterID)
 	t.Log(err,r)
@@ -124,6 +132,7 @@ func postMessage(symkey string) (RpcResponse,error) {
 		Payload: "0x73656e74206265666f72652066696c7465722077617320616374697665202873796d6d657472696329",
 		PowTarget: 0.001,
 		PowTime: 2,
+		TTL: 2,
 	}}))
 	if err!=nil {
 		return RpcResponse{},err
@@ -181,4 +190,13 @@ func makeRpcResponse(r io.Reader) (RpcResponse,error) {
 	rsp:=RpcResponse{}
 	err:=json.NewDecoder(r).Decode(&rsp)
 	return rsp, err
+}
+
+
+
+func startLocalWhisperNode() {
+	args:=os.Args
+	os.Args=append(args,[]string{"-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-httpport=8536", "-http=true"}...)
+	go main()
+	time.Sleep(3*time.Second)
 }
