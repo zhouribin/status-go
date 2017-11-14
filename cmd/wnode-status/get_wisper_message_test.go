@@ -78,25 +78,27 @@ func MakeRpcRequest(method string, params interface{}) RpcRequest {
 func TestGetWisperMessage(t *testing.T) {
 	n1 := Cli{addr: "http://localhost:8537"}
 	n2 := Cli{addr: "http://localhost:8536"}
+
 	t.Log("Start nodes")
-	startLocalWhisperNode()
+	closeCh := make(chan struct{})
+	doneCh := startLocalWhisperNode(closeCh)
+	defer func() {
+		close(closeCh)
+		<-doneCh
+	}()
+
 	t.Log("Create symkeyID1")
 	symkeyID1, err := n1.createSymkey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	symkey,err:=n1.getSymkey(symkeyID1)
+
+	symkey, err := n1.getSymkey(symkeyID1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	symkeyID2, err := n2.addSymkey(symkey)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Log("Make filter")
-	msgFilterID1, err := n1.makeMessageFilter(symkeyID1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -113,26 +115,8 @@ func TestGetWisperMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	//make get message
-	t.Log("get message 1 from 1")
-	r, err := n1.getFilterMessages(msgFilterID1)
-	t.Log(err, r)
 	t.Log("get message 1 from 2")
-	r, err = n2.getFilterMessages(msgFilterID2)
-	t.Log(err, r)
-
-
-	t.Log("post message to 2")
-	_, err = n2.postMessage(symkeyID2)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Log("get message 2 from 1")
-	r, err = n1.getFilterMessages(msgFilterID1)
-	t.Log(err, r)
-	t.Log("get message 2 from 2")
-	r, err = n2.getFilterMessages(msgFilterID2)
+	r, err := n2.getFilterMessages(msgFilterID2)
 	t.Log(err, r)
 }
 
@@ -201,7 +185,7 @@ func (c Cli) postMessage(symkey string) (RpcResponse, error) {
 		Payload:   "0x73656e74206265666f72652066696c7465722077617320616374697665202873796d6d657472696329",
 		PowTarget: 0.001,
 		PowTime:   2,
-		TTL:       2,
+		TTL:       20,
 	}}))
 	if err != nil {
 		return RpcResponse{}, err
@@ -262,33 +246,53 @@ func makeRpcResponse(r io.Reader) (RpcResponse, error) {
 	return rsp, err
 }
 
-func startLocalWhisperNode() {
+func startLocalWhisperNode(closeCh chan struct{}) (done chan struct{}) {
 	os.Setenv("ACCOUNT_PASSWORD", "F796da56718FAD1_dd5214F4-43B358A")
 	defer os.Unsetenv("ACCOUNT_PASSWORD")
 
 	dir := getRootDir()
 	args := os.Args
-	os.Args = append(args, []string{"-mailserver=true", "-identity=" + dir + "/../../static/keys/wnodekey", "-password=" + dir + "/../../static/keys/wnodepassword", "-httpport=8536", "-http=true", "-networkid=3"}...)
+	os.Args = append(args, []string{"-httpport=8536", "-http=true"}...)
 	go main()
 	time.Sleep(time.Second)
 
 	fmt.Println(dir)
+	done = make(chan struct{})
 	go func() {
-		cmd := exec.Command("./wnode-status",
-			"-mailserver=true",
-			"-identity="+dir+"/../../static/keys/wnodekey",
-			"-password="+dir+"/../../static/keys/wnodepassword",
-			"-httpport=8537",
-			"-http=true",
-			"-networkid=3")
+		cmd := exec.Command("./wnode-status", "-httpport=8537", "-http=true")
 		cmd.Dir = dir + "/../../build/bin/"
 		fmt.Println(cmd)
+
+		var out bytes.Buffer
+		cmd.Stderr = &out
 		err := cmd.Start()
-		fmt.Println(err)
+		if err != nil {
+			fmt.Println(err)
+		}
+		fmt.Println(cmd.Process.Pid, out.String(), cmd.ProcessState.String())
+
+		<-closeCh
+		// kill magic
+
+		if err = cmd.Process.Kill(); err != nil {
+			fmt.Println(err)
+		}
+
+		exitStatus, err := cmd.Process.Wait()
+		if err != nil {
+			fmt.Println(err)
+		}
+
+		fmt.Println("8537 Killed", exitStatus.String())
+
+		close(done)
 	}()
+
 	fmt.Println("1")
 	time.Sleep(4 * time.Second)
 	fmt.Println("Init end")
+
+	return done
 }
 func getRootDir() string {
 	_, f, _, _ := runtime.Caller(0)
