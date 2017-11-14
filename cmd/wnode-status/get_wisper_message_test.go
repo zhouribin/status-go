@@ -3,9 +3,13 @@ package main
 import (
 	"bytes"
 	"encoding/json"
+	"fmt"
 	"io"
 	"net/http"
 	"os"
+	"os/exec"
+	"path"
+	"runtime"
 	"testing"
 	"time"
 )
@@ -74,45 +78,100 @@ func MakeRpcRequest(method string, params interface{}) RpcRequest {
 var c http.Client
 
 func TestGetWisperMessage(t *testing.T) {
+	n1 := Cli{addr: "http://localhost:8537"}
+	n2 := Cli{addr: "http://localhost:8536"}
+	t.Log("Start nodes")
 	startLocalWhisperNode()
-	symkey, err := createSymkey()
+	t.Log("Create symkey")
+	symkey, err := n1.createSymkey()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	msgFilterID, err := makeMessageFilter(symkey)
+	symkey1, err := n2.addSymkey(symkey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	_, err = postMessage(symkey)
+	t.Log("Make filter")
+	msgFilterID1, err := n1.makeMessageFilter(symkey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Make filter")
+	msgFilterID2, err := n2.makeMessageFilter(symkey1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("post message")
+	_, err = n1.postMessage(symkey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	//make get message
-	t.Log("get message 1")
-	r, err := getFilterMessages(msgFilterID)
+	t.Log("get message 1 from 1")
+	r, err := n1.getFilterMessages(msgFilterID1)
+	t.Log(err, r)
+	t.Log("get message 1 from 2")
+	r, err = n2.getFilterMessages(msgFilterID2)
 	t.Log(err, r)
 
-	_, err = postMessage(symkey)
+	_, err = n2.postMessage(symkey1)
 	if err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(3 * time.Second)
-	t.Log("get message 2")
-	r, err = getFilterMessages(msgFilterID)
+
+	//t.Log("get message 2 from 1")
+	//r, err = n1.getFilterMessages(msgFilterID1)
+	//t.Log(err, r)
+	//t.Log("get message 2 from 2")
+	//r, err = n2.getFilterMessages(msgFilterID2)
+	//t.Log(err, r)
+
+	time.Sleep(200 * time.Second)
+
+	t.Log("get message 2 from 1")
+	r, err = n1.getFilterMessages(msgFilterID1)
+	t.Log(err, r)
+	t.Log("get message 2 from 2")
+	r, err = n2.getFilterMessages(msgFilterID2)
 	t.Log(err, r)
 
 }
 
+type Cli struct {
+	addr string
+	c    http.Client
+}
+
 //create sym key
-func createSymkey() (string, error) {
+func (c Cli) createSymkey() (string, error) {
 	r, err := makeBody(MakeRpcRequest("shh_newSymKey", nil))
 	if err != nil {
 		return "", err
 	}
-	resp, err := c.Post("http://localhost:8536", "application/json", r)
+	resp, err := c.c.Post(c.addr, "application/json", r)
+	if err != nil {
+		return "", err
+	}
+	rsp, err := makeRpcResponse(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return rsp.Result.(string), nil
+}
+
+//create sym key
+//curl -X POST --data '{"jsonrpc":"2.0","method":"shh_addSymKey","params":["0xf6dcf21ed6a17bd78d8c4c63195ab997b3b65ea683705501eae82d32667adc92"],"id":1}'
+func (c Cli) addSymkey(s string) (string, error) {
+	r, err := makeBody(MakeRpcRequest("shh_addSymKey", []string{"0x" + s}))
+	if err != nil {
+		return "", err
+	}
+	resp, err := c.c.Post(c.addr, "application/json", r)
 	if err != nil {
 		return "", err
 	}
@@ -124,7 +183,7 @@ func createSymkey() (string, error) {
 }
 
 //post wisper message
-func postMessage(symkey string) (RpcResponse, error) {
+func (c Cli) postMessage(symkey string) (RpcResponse, error) {
 	r, err := makeBody(MakeRpcRequest("shh_post", []shhPost{{
 		SymKeyId:  symkey,
 		Topic:     "0xe00123a5",
@@ -137,14 +196,14 @@ func postMessage(symkey string) (RpcResponse, error) {
 		return RpcResponse{}, err
 	}
 
-	resp, err := c.Post("http://localhost:8536", "application/json", r)
+	resp, err := c.c.Post(c.addr, "application/json", r)
 	if err != nil {
 		return RpcResponse{}, err
 	}
 	return makeRpcResponse(resp.Body)
 }
 
-func makeMessageFilter(symkey string) (string, error) {
+func (c Cli) makeMessageFilter(symkey string) (string, error) {
 	//make filter
 	r, err := makeBody(MakeRpcRequest("shh_newMessageFilter", []shhNewMessageFilter{{
 		SymKeyId: symkey,
@@ -154,7 +213,7 @@ func makeMessageFilter(symkey string) (string, error) {
 		return "", err
 	}
 
-	resp, err := c.Post("http://localhost:8536", "application/json", r)
+	resp, err := c.c.Post(c.addr, "application/json", r)
 	if err != nil {
 		return "", err
 	}
@@ -166,18 +225,19 @@ func makeMessageFilter(symkey string) (string, error) {
 	return rsp.Result.(string), nil
 }
 
-func getFilterMessages(msgFilterID string) (RpcResponse, error) {
+func (c Cli) getFilterMessages(msgFilterID string) (RpcResponse, error) {
 	r, err := makeBody(MakeRpcRequest("shh_getFilterMessages", []string{msgFilterID}))
 	if err != nil {
 		return RpcResponse{}, err
 	}
 
-	resp, err := c.Post("http://localhost:8536", "application/json", r)
+	resp, err := c.c.Post(c.addr, "application/json", r)
 	if err != nil {
 		return RpcResponse{}, err
 	}
 	return makeRpcResponse(resp.Body)
 }
+
 func makeBody(r RpcRequest) (io.Reader, error) {
 	b, err := json.Marshal(r)
 	if err != nil {
@@ -192,8 +252,33 @@ func makeRpcResponse(r io.Reader) (RpcResponse, error) {
 }
 
 func startLocalWhisperNode() {
+	os.Setenv("ACCOUNT_PASSWORD", "F796da56718FAD1_dd5214F4-43B358A")
+	defer os.Unsetenv("ACCOUNT_PASSWORD")
+
+	dir := getRootDir()
 	args := os.Args
-	os.Args = append(args, []string{"-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-httpport=8536", "-http=true"}...)
+	os.Args = append(args, []string{"-mailserver=true", "-identity=" + dir + "/../../static/keys/wnodekey", "-password=" + dir + "/../../static/keys/wnodepassword", "-httpport=8536", "-http=true", "-injectaccounts=false"}...)
 	go main()
-	time.Sleep(3 * time.Second)
+	time.Sleep(time.Second)
+
+	fmt.Println(dir)
+	go func() {
+		cmd := exec.Command("./wnode-status",
+			"-mailserver=true",
+			"-identity="+dir+"/../../static/keys/wnodekey",
+			"-password="+dir+"/../../static/keys/wnodepassword",
+			"-httpport=8537",
+			"-http=true")
+		cmd.Dir = dir + "/../../build/bin/"
+		fmt.Println(cmd)
+		err := cmd.Start()
+		fmt.Println(err)
+	}()
+	fmt.Println("1")
+	time.Sleep(4 * time.Second)
+	fmt.Println("Init end")
+}
+func getRootDir() string {
+	_, f, _, _ := runtime.Caller(0)
+	return path.Dir(f)
 }
