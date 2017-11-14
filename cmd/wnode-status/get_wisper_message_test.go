@@ -75,8 +75,6 @@ func MakeRpcRequest(method string, params interface{}) RpcRequest {
 	}
 }
 
-var c http.Client
-
 func TestGetWisperMessage(t *testing.T) {
 	n1 := Cli{addr: "http://localhost:8537"}
 	n2 := Cli{addr: "http://localhost:8536"}
@@ -105,7 +103,7 @@ func TestGetWisperMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Log("post message")
+	t.Log("post message to 1")
 	_, err = n1.postMessage(symkey)
 	if err != nil {
 		t.Fatal(err)
@@ -119,19 +117,12 @@ func TestGetWisperMessage(t *testing.T) {
 	r, err = n2.getFilterMessages(msgFilterID2)
 	t.Log(err, r)
 
+
+	t.Log("post message to 2")
 	_, err = n2.postMessage(symkey1)
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	//t.Log("get message 2 from 1")
-	//r, err = n1.getFilterMessages(msgFilterID1)
-	//t.Log(err, r)
-	//t.Log("get message 2 from 2")
-	//r, err = n2.getFilterMessages(msgFilterID2)
-	//t.Log(err, r)
-
-	time.Sleep(200 * time.Second)
 
 	t.Log("get message 2 from 1")
 	r, err = n1.getFilterMessages(msgFilterID1)
@@ -139,7 +130,6 @@ func TestGetWisperMessage(t *testing.T) {
 	t.Log("get message 2 from 2")
 	r, err = n2.getFilterMessages(msgFilterID2)
 	t.Log(err, r)
-
 }
 
 type Cli struct {
@@ -257,7 +247,7 @@ func startLocalWhisperNode() {
 
 	dir := getRootDir()
 	args := os.Args
-	os.Args = append(args, []string{"-mailserver=true", "-identity=" + dir + "/../../static/keys/wnodekey", "-password=" + dir + "/../../static/keys/wnodepassword", "-httpport=8536", "-http=true", "-injectaccounts=false"}...)
+	os.Args = append(args, []string{"-mailserver=true", "-identity=" + dir + "/../../static/keys/wnodekey", "-password=" + dir + "/../../static/keys/wnodepassword", "-httpport=8536", "-http=true", "-networkid=3"}...)
 	go main()
 	time.Sleep(time.Second)
 
@@ -268,7 +258,8 @@ func startLocalWhisperNode() {
 			"-identity="+dir+"/../../static/keys/wnodekey",
 			"-password="+dir+"/../../static/keys/wnodepassword",
 			"-httpport=8537",
-			"-http=true")
+			"-http=true",
+			"-networkid=3")
 		cmd.Dir = dir + "/../../build/bin/"
 		fmt.Println(cmd)
 		err := cmd.Start()
