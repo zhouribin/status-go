@@ -114,7 +114,7 @@ func TestGetWisperMessage(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
+	time.Sleep(time.Second)
 	t.Log("get message 1 from 2")
 	r, err := n2.getFilterMessages(msgFilterID2)
 	t.Log(err, r)
@@ -178,9 +178,9 @@ func (c Cli) addSymkey(s string) (string, error) {
 }
 
 //post wisper message
-func (c Cli) postMessage(symkey string) (RpcResponse, error) {
+func (c Cli) postMessage(symkeyID string) (RpcResponse, error) {
 	r, err := makeBody(MakeRpcRequest("shh_post", []shhPost{{
-		SymKeyId:  symkey,
+		SymKeyId:  symkeyID,
 		Topic:     "0xe00123a5",
 		Payload:   "0x73656e74206265666f72652066696c7465722077617320616374697665202873796d6d657472696329",
 		PowTarget: 0.001,
