@@ -80,31 +80,35 @@ func TestGetWisperMessage(t *testing.T) {
 	n2 := Cli{addr: "http://localhost:8536"}
 	t.Log("Start nodes")
 	startLocalWhisperNode()
-	t.Log("Create symkey")
-	symkey, err := n1.createSymkey()
+	t.Log("Create symkeyID1")
+	symkeyID1, err := n1.createSymkey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	symkey,err:=n1.getSymkey(symkeyID1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	symkey1, err := n2.addSymkey(symkey)
+	symkeyID2, err := n2.addSymkey(symkey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Log("Make filter")
-	msgFilterID1, err := n1.makeMessageFilter(symkey)
+	msgFilterID1, err := n1.makeMessageFilter(symkeyID1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Log("Make filter")
-	msgFilterID2, err := n2.makeMessageFilter(symkey1)
+	msgFilterID2, err := n2.makeMessageFilter(symkeyID2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Log("post message to 1")
-	_, err = n1.postMessage(symkey)
+	_, err = n1.postMessage(symkeyID1)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -119,7 +123,7 @@ func TestGetWisperMessage(t *testing.T) {
 
 
 	t.Log("post message to 2")
-	_, err = n2.postMessage(symkey1)
+	_, err = n2.postMessage(symkeyID2)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -154,10 +158,27 @@ func (c Cli) createSymkey() (string, error) {
 	return rsp.Result.(string), nil
 }
 
+//get sym key
+func (c Cli) getSymkey(s string) (string, error) {
+	r, err := makeBody(MakeRpcRequest("shh_getSymKey", []string{s}))
+	if err != nil {
+		return "", err
+	}
+	resp, err := c.c.Post(c.addr, "application/json", r)
+	if err != nil {
+		return "", err
+	}
+	rsp, err := makeRpcResponse(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return rsp.Result.(string), nil
+}
+
 //create sym key
 //curl -X POST --data '{"jsonrpc":"2.0","method":"shh_addSymKey","params":["0xf6dcf21ed6a17bd78d8c4c63195ab997b3b65ea683705501eae82d32667adc92"],"id":1}'
 func (c Cli) addSymkey(s string) (string, error) {
-	r, err := makeBody(MakeRpcRequest("shh_addSymKey", []string{"0x" + s}))
+	r, err := makeBody(MakeRpcRequest("shh_addSymKey", []string{s}))
 	if err != nil {
 		return "", err
 	}
