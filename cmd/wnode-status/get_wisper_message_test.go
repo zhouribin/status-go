@@ -82,12 +82,11 @@ func TestGetWhisperMessage(t *testing.T) {
 	t.Log("Start nodes")
 	initNode()
 	closeCh := make(chan struct{})
-	doneCh := startNode(closeCh, "-httpport=8537", "-http=true", "-datadir=w1")
+	doneFn := startNode(closeCh, "-httpport=8537", "-http=true", "-datadir=w1")
 	time.Sleep(4 * time.Second)
 	defer func() {
-		t.Log("finishing...")
 		close(closeCh)
-		<-doneCh
+		doneFn()
 	}()
 
 	t.Log("Create symkeyID1")
@@ -128,24 +127,19 @@ func TestGetWhisperMessage(t *testing.T) {
 }
 
 func TestGetWhisperMessageMailServer(t *testing.T) {
-	n1 := Cli{addr: "http://localhost:8537"}
-	n2 := Cli{addr: "http://localhost:8536"}
+	n1 := Cli{addr: "http://localhost:8536"}
+	n2 := Cli{addr: "http://localhost:8537"}
 	nMail := Cli{addr: "http://localhost:8538"}
-
 	_ = nMail
 
 	t.Log("Start nodes")
 	initNode()
 	closeCh := make(chan struct{})
-	doneCh := composeNodesClose(
-		startNode(closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
-		startNode(closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
-	)
+	doneFn := startNode(closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2")
 	time.Sleep(4 * time.Second)
 	defer func() {
-		t.Log("finishing...")
 		close(closeCh)
-		<-doneCh
+		doneFn()
 	}()
 
 	t.Log("Create symkeyID1")
@@ -154,18 +148,24 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	t.Log("post message to 1")
+	_, err = n1.postMessage(symkeyID1, 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(10 * time.Second)
+	// start receiver node
+	doneFnNode2 := startNode(closeCh, "-httpport=8537", "-http=true", "-datadir=w1")
+	time.Sleep(4 * time.Second)
+	doneFn = composeNodesClose(doneFnNode2, doneFn)
+
 	symkey, err := n1.getSymkey(symkeyID1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	symkeyID2, err := n2.addSymkey(symkey)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Log("post message to 1")
-	_, err = n1.postMessage(symkeyID1, 100)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -318,22 +318,15 @@ func initNode() {
 	time.Sleep(time.Second)
 }
 
-func composeNodesClose(dones ...chan struct{}) (done chan struct{}) {
-	done = make(chan struct{})
-	go func() {
-		for _, doneCh := range dones {
-			<-doneCh
+func composeNodesClose(doneFns ...func()) func() {
+	return func() {
+		for _, doneF := range doneFns {
+			doneF()
 		}
-		close(done)
-	}()
-
-	time.Sleep(4 * time.Second)
-	fmt.Println("Init end")
-
-	return done
+	}
 }
 
-func startNode(closeCh chan struct{}, args ...string) (done chan struct{}) {
+func startNode(closeCh chan struct{}, args ...string) (doneFn func()) {
 	cmd := exec.Command("./wnode-status", args...)
 	cmd.Dir = getRootDir() + "/../../build/bin/"
 	fmt.Println(cmd)
@@ -345,7 +338,7 @@ func startNode(closeCh chan struct{}, args ...string) (done chan struct{}) {
 		fmt.Println(err)
 	}
 
-	done = make(chan struct{})
+	done := make(chan struct{})
 	go func() {
 		<-closeCh
 
@@ -364,7 +357,12 @@ func startNode(closeCh chan struct{}, args ...string) (done chan struct{}) {
 		close(done)
 	}()
 
-	return done
+	doneFn = func() {
+		fmt.Println("finishing...")
+		<-done
+	}
+
+	return doneFn
 }
 
 func getRootDir() string {
