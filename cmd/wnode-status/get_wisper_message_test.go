@@ -75,14 +75,17 @@ func MakeRpcRequest(method string, params interface{}) RpcRequest {
 	}
 }
 
-func TestGetWisperMessage(t *testing.T) {
+func TestGetWhisperMessage(t *testing.T) {
 	n1 := Cli{addr: "http://localhost:8537"}
 	n2 := Cli{addr: "http://localhost:8536"}
 
 	t.Log("Start nodes")
+	initNode()
 	closeCh := make(chan struct{})
-	doneCh := startLocalWhisperNode(closeCh)
+	doneCh := startNode(closeCh, "-httpport=8537", "-http=true", "-datadir=w1")
+	time.Sleep(4 * time.Second)
 	defer func() {
+		t.Log("finishing...")
 		close(closeCh)
 		<-doneCh
 	}()
@@ -103,20 +106,82 @@ func TestGetWisperMessage(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	t.Log("post message to 1")
+	_, err = n1.postMessage(symkeyID1, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	t.Log("Make filter")
 	msgFilterID2, err := n2.makeMessageFilter(symkeyID2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Log("post message to 1")
-	_, err = n1.postMessage(symkeyID1)
+	time.Sleep(1 * time.Second)
+	t.Log("get message 1 from 2")
+	r, err := n2.getFilterMessages(msgFilterID2)
+	if len(r.Result.([]interface{})) == 0 {
+		t.Fatal("Hasnt got any messages")
+	}
+	t.Log(err, r)
+}
+
+func TestGetWhisperMessageMailServer(t *testing.T) {
+	n1 := Cli{addr: "http://localhost:8537"}
+	n2 := Cli{addr: "http://localhost:8536"}
+	nMail := Cli{addr: "http://localhost:8538"}
+
+	_ = nMail
+
+	t.Log("Start nodes")
+	initNode()
+	closeCh := make(chan struct{})
+	doneCh := composeNodesClose(
+		startNode(closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode(closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
+	)
+	time.Sleep(4 * time.Second)
+	defer func() {
+		t.Log("finishing...")
+		close(closeCh)
+		<-doneCh
+	}()
+
+	t.Log("Create symkeyID1")
+	symkeyID1, err := n1.createSymkey()
 	if err != nil {
 		t.Fatal(err)
 	}
-	time.Sleep(time.Second)
+
+	symkey, err := n1.getSymkey(symkeyID1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	symkeyID2, err := n2.addSymkey(symkey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("post message to 1")
+	_, err = n1.postMessage(symkeyID1, 100)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Make filter")
+	msgFilterID2, err := n2.makeMessageFilter(symkeyID2)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(1 * time.Second)
 	t.Log("get message 1 from 2")
 	r, err := n2.getFilterMessages(msgFilterID2)
+	if len(r.Result.([]interface{})) == 0 {
+		t.Fatal("Hasnt got any messages")
+	}
 	t.Log(err, r)
 }
 
@@ -178,14 +243,14 @@ func (c Cli) addSymkey(s string) (string, error) {
 }
 
 //post wisper message
-func (c Cli) postMessage(symkeyID string) (RpcResponse, error) {
+func (c Cli) postMessage(symKeyID string, ttl int) (RpcResponse, error) {
 	r, err := makeBody(MakeRpcRequest("shh_post", []shhPost{{
-		SymKeyId:  symkeyID,
+		SymKeyId:  symKeyID,
 		Topic:     "0xe00123a5",
 		Payload:   "0x73656e74206265666f72652066696c7465722077617320616374697665202873796d6d657472696329",
 		PowTarget: 0.001,
-		PowTime:   2,
-		TTL:       20,
+		PowTime:   1,
+		TTL:       ttl,
 	}}))
 	if err != nil {
 		return RpcResponse{}, err
@@ -198,10 +263,10 @@ func (c Cli) postMessage(symkeyID string) (RpcResponse, error) {
 	return makeRpcResponse(resp.Body)
 }
 
-func (c Cli) makeMessageFilter(symkey string) (string, error) {
+func (c Cli) makeMessageFilter(symKeyID string) (string, error) {
 	//make filter
 	r, err := makeBody(MakeRpcRequest("shh_newMessageFilter", []shhNewMessageFilter{{
-		SymKeyId: symkey,
+		SymKeyId: symKeyID,
 		Topics:   []string{"0xe00123a5"},
 	}}))
 	if err != nil {
@@ -246,34 +311,45 @@ func makeRpcResponse(r io.Reader) (RpcResponse, error) {
 	return rsp, err
 }
 
-func startLocalWhisperNode(closeCh chan struct{}) (done chan struct{}) {
-	os.Setenv("ACCOUNT_PASSWORD", "F796da56718FAD1_dd5214F4-43B358A")
-	defer os.Unsetenv("ACCOUNT_PASSWORD")
-
-	dir := getRootDir()
+func initNode() {
 	args := os.Args
 	os.Args = append(args, []string{"-httpport=8536", "-http=true"}...)
 	go main()
 	time.Sleep(time.Second)
+}
 
-	fmt.Println(dir)
+func composeNodesClose(dones ...chan struct{}) (done chan struct{}) {
 	done = make(chan struct{})
 	go func() {
-		cmd := exec.Command("./wnode-status", "-httpport=8537", "-http=true")
-		cmd.Dir = dir + "/../../build/bin/"
-		fmt.Println(cmd)
-
-		var out bytes.Buffer
-		cmd.Stderr = &out
-		err := cmd.Start()
-		if err != nil {
-			fmt.Println(err)
+		for _, doneCh := range dones {
+			<-doneCh
 		}
-		fmt.Println(cmd.Process.Pid, out.String(), cmd.ProcessState.String())
+		close(done)
+	}()
 
+	time.Sleep(4 * time.Second)
+	fmt.Println("Init end")
+
+	return done
+}
+
+func startNode(closeCh chan struct{}, args ...string) (done chan struct{}) {
+	cmd := exec.Command("./wnode-status", args...)
+	cmd.Dir = getRootDir() + "/../../build/bin/"
+	fmt.Println(cmd)
+
+	cmd.Stderr = os.Stdout
+	cmd.Stdout = os.Stdout
+	err := cmd.Start()
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	done = make(chan struct{})
+	go func() {
 		<-closeCh
-		// kill magic
 
+		// kill magic
 		if err = cmd.Process.Kill(); err != nil {
 			fmt.Println(err)
 		}
@@ -283,17 +359,14 @@ func startLocalWhisperNode(closeCh chan struct{}) (done chan struct{}) {
 			fmt.Println(err)
 		}
 
-		fmt.Println("8537 Killed", exitStatus.String())
+		fmt.Println("Killed", exitStatus.String(), args)
 
 		close(done)
 	}()
 
-	fmt.Println("1")
-	time.Sleep(4 * time.Second)
-	fmt.Println("Init end")
-
 	return done
 }
+
 func getRootDir() string {
 	_, f, _, _ := runtime.Caller(0)
 	return path.Dir(f)
