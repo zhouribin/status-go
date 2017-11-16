@@ -65,6 +65,13 @@ func MakeNode(config *params.NodeConfig, deliveryServer whisper.DeliveryServer) 
 		stackConfig.P2P.PrivateKey = pk
 	}
 
+	//stackConfig.P2P.ListenAddr = ":30303"
+	fmt.Println("\n\n____________________________________________________________________")
+	fmt.Println(stackConfig.P2P.DiscoveryV5Addr)
+	fmt.Println(stackConfig.P2P.ListenAddr)
+	fmt.Println(stackConfig.HTTPPort)
+	fmt.Println(stackConfig.HTTPEndpoint())
+	fmt.Println("____________________________________________________________________\n\n")
 	stack, err := node.New(stackConfig)
 	if err != nil {
 		return nil, ErrNodeMakeFailure
@@ -112,6 +119,11 @@ func defaultEmbeddedNodeConfig(config *params.NodeConfig) *node.Config {
 		WSPort:      config.WSPort,
 		WSOrigins:   []string{"*"},
 		WSModules:   strings.Split(config.APIModules, ","),
+	}
+
+	if config.WhisperConfig.MailServerNode {
+		// fixme(@jeka): we fix mailserver port
+		nc.P2P.ListenAddr = ":30303"
 	}
 
 	if config.RPCEnabled {

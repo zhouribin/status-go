@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"io"
 	"net/http"
@@ -48,6 +49,7 @@ type shhPost struct {
 type shhNewMessageFilter struct {
 	SymKeyId string   `json:"symKeyID"`
 	Topics   []string `json:"topics"`
+	AllowP2P bool     `json:"allowP2P"`
 }
 
 type RpcRequest struct {
@@ -216,14 +218,35 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	t.Log(err, r)
 
 	w, _ := backend.NodeManager().WhisperService()
-	_ = w
-	//mailServerEnode := "enode://0edb0d71a3dbe928e154fcb696ffbda359b153a90efc2b46f0043ce9f5dbe55b77b9328fd841a1db5273758624afadd5b39638d4c35b36b3a96e1a586c1b4c2a@127.0.0.1:30379"
-	go func() {
-		//err = requestExpiredMessagesLoop(w, "e00123a5", mailServerEnode, "asdfasdf", 0, 1510769730, closeCh)
-		t.Fatal("error in requestExpiredMessagesLoop", err)
-	}()
+	mailServerEnode := "enode://7ef1407cccd16c90d01bfd8245b4b93c2f78e7d19769dc310cf46628d614d8aa7259005ef532d426092fa14ef0010ff7d83d5bfd108614d447b0b07499ffda78@127.0.0.1:30303"
+
+	err = backend.NodeManager().AddPeer(mailServerEnode)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	n, err := backend.NodeManager().Node()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mailNode, err := discover.ParseNode(mailServerEnode)
+	if err != nil {
+		t.Fatal(err)
+	}
+	n.Server().AddPeer(mailNode)
 
 	time.Sleep(5 * time.Second)
+	go func() {
+		err = requestExpiredMessagesLoop(w, topic[2:], mailServerEnode, "asdfasdf",
+			0, uint32(time.Now().Add(2*time.Minute).Unix()), closeCh)
+
+		if err != nil {
+			t.Fatal("error in requestExpiredMessagesLoop", err)
+		}
+	}()
+
+	time.Sleep(60 * time.Second)
 
 	t.Log("get message 1 from 2")
 	r, err = receiverNode.getFilterMessages(msgFilterID2)
@@ -231,6 +254,7 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 		t.Fatal("Hasnt got any messages")
 	}
 	t.Log(err, r)
+
 }
 
 type Cli struct {
@@ -316,6 +340,7 @@ func (c Cli) makeMessageFilter(symKeyID string, topic string) (string, error) {
 	r, err := makeBody(MakeRpcRequest("shh_newMessageFilter", []shhNewMessageFilter{{
 		SymKeyId: symKeyID,
 		Topics:   []string{topic},
+		AllowP2P: true,
 	}}))
 	if err != nil {
 		return "", err
@@ -409,6 +434,7 @@ func startNode(closeCh chan struct{}, args ...string) (doneFn func()) {
 		close(done)
 	}()
 
+	time.Sleep(4 * time.Second)
 	doneFn = func() {
 		fmt.Println("finishing...")
 		<-done

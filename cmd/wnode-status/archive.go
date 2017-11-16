@@ -36,6 +36,8 @@ func requestExpiredMessagesLoop(shh *whisper.Whisper, topic, mailServerEnode, pa
 	var key, mailServerPeerID []byte
 	var xt, empty whisper.TopicType
 
+	fmt.Println("Time:", timeLow, timeUpp)
+
 	keyID, err := shh.AddSymKeyFromPassword(password)
 	if err != nil {
 		return fmt.Errorf("Failed to create symmetric key for mail request: %s", err)
@@ -44,6 +46,9 @@ func requestExpiredMessagesLoop(shh *whisper.Whisper, topic, mailServerEnode, pa
 	if err != nil {
 		return fmt.Errorf("Failed to save symmetric key for mail request: %s", err)
 	}
+
+	key, err = shh.GetSymKey("77d185965daa460ee7a8cb44f6001bb9884a04ed27a49ba6ea0f81cd4e5ac40b")
+	fmt.Println("_____________________________________", string(key), keyID)
 
 	mailServerPeerID, err = extractIdFromEnode(mailServerEnode)
 	if err != nil {

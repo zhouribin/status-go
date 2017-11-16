@@ -4,6 +4,7 @@ import (
 	"context"
 	"sync"
 
+	"fmt"
 	gethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/status-im/status-go/geth/account"
 	"github.com/status-im/status-go/geth/common"
@@ -103,13 +104,13 @@ func (m *StatusBackend) onNodeStart(nodeStarted <-chan struct{}, backendReady ch
 	<-nodeStarted
 
 	if err := m.registerHandlers(); err != nil {
-		log.Error("Handler registration failed", "err", err)
+		fmt.Println("Handler registration failed", "err", err)
 	}
 
 	if err := m.accountManager.ReSelectAccount(); err != nil {
-		log.Error("Reselect account failed", "err", err)
+		fmt.Println("Reselect account failed", "err", err)
 	}
-	log.Info("Account reselected")
+	fmt.Println("Account reselected")
 
 	close(backendReady)
 	signal.Send(signal.Envelope{
@@ -240,6 +241,7 @@ func (m *StatusBackend) DiscardTransactions(ids []common.QueuedTxID) map[common.
 func (m *StatusBackend) registerHandlers() error {
 	rpcClient := m.NodeManager().RPCClient()
 	if rpcClient == nil {
+		fmt.Println("1111111111111111111")
 		return node.ErrRPCClient
 	}
 

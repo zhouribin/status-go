@@ -43,6 +43,9 @@ func main() {
 		log.Fatalf("Making config failed: %v", err)
 	}
 
+	mailNode := "enode://7ef1407cccd16c90d01bfd8245b4b93c2f78e7d19769dc310cf46628d614d8aa7259005ef532d426092fa14ef0010ff7d83d5bfd108614d447b0b07499ffda78@127.0.0.1:30303"
+	config.BootClusterConfig.BootNodes = append([]string{mailNode}, config.BootClusterConfig.BootNodes...)
+
 	printHeader(config)
 
 	if *injectAccounts {
