@@ -4,15 +4,16 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"runtime"
+	"strconv"
 	"testing"
 	"time"
-	"strconv"
 )
 
 //see api at https://github.com/ethereum/go-ethereum/wiki/Whisper-v5-RPC-API
@@ -76,54 +77,81 @@ func MakeRpcRequest(method string, params interface{}) RpcRequest {
 	}
 }
 
-func TestGetWhisperMessage(t *testing.T) {
-	n1 := Cli{addr: "http://localhost:8537"}
-	n2 := Cli{addr: "http://localhost:8536"}
+func TestAliceSendMessageToBobWithSymkeyAndTopicAndBobReceiveThisMessage_Success(t *testing.T) {
+	os.Setenv("ACCOUNT_PASSWORD", "F796da56718FAD1_dd5214F4-43B358A")
+	defer os.Unsetenv("ACCOUNT_PASSWORD")
+
+	alice := Cli{addr: "http://localhost:8536"}
+	bob := Cli{addr: "http://localhost:8537"}
 
 	t.Log("Start nodes")
 	startLocalNode(8536)
+
 	closeCh := make(chan struct{})
-	doneFn := startNode(closeCh, "-httpport=8537", "-http=true", "-datadir=w1")
+	doneFn := composeNodesClose(
+		startNode(closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+	)
 	time.Sleep(4 * time.Second)
+
 	defer func() {
 		close(closeCh)
 		doneFn()
 	}()
 
-	t.Log("Create symkeyID1")
-	symkeyID1, err := n1.createSymkey()
+	t.Log("Create symkey and get alicesymkeyID")
+	alicesymkeyID, err := alice.createSymkey()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	symkey, err := n1.getSymkey(symkeyID1)
+	t.Log("Create topic")
+	topic := whisperv5.BytesToTopic([]byte("some topic name"))
+
+	t.Log("Get symkey by alicesymkeyID")
+	symkey, err := alice.getSymkey(alicesymkeyID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	symkeyID2, err := n2.addSymkey(symkey)
+	t.Log("alice send to bob symkey and topic: %v  -  %v", topic, symkey)
+
+	t.Log("Get symkey to bob node and get bobsymkeyID")
+	bobSymkeyID, err := bob.addSymkey(symkey)
+
+	t.Log("Make alice filter for topic")
+	aliceMsgFilterID, err := alice.makeMessageFilter(alicesymkeyID, topic.String())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Log("post message to 1")
-	_, err = n1.postMessage(symkeyID1, 100)
+	t.Log("Make bob filter for topic")
+	bobMsgFilterID, err := bob.makeMessageFilter(bobSymkeyID, topic.String())
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Log("Make filter")
-	msgFilterID2, err := n2.makeMessageFilter(symkeyID2)
+	t.Log("Alice send message to Bob")
+	_, err = alice.postMessage(alicesymkeyID, topic.String(), 4)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	//wait message
 	time.Sleep(1 * time.Second)
-	t.Log("get message 1 from 2")
-	r, err := n2.getFilterMessages(msgFilterID2)
+
+	t.Log("Bob get message")
+	r, err := bob.getFilterMessages(bobMsgFilterID)
 	if len(r.Result.([]interface{})) == 0 {
 		t.Fatal("Hasnt got any messages")
 	}
+	t.Log(err, r)
+
+	t.Log("Alice get message")
+	r, err = alice.getFilterMessages(aliceMsgFilterID)
+	if len(r.Result.([]interface{})) == 0 {
+		t.Fatal("Hasnt got any messages")
+	}
+
 	t.Log(err, r)
 }
 
@@ -132,6 +160,7 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	receiverNode := Cli{addr: "http://localhost:8536"}
 	nMail := Cli{addr: "http://localhost:8538"}
 	_ = nMail
+	topic := "0xe00123a5"
 
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
@@ -152,7 +181,7 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	}
 
 	t.Log("post message to 1")
-	_, err = senderNode.postMessage(symkeyID1, 4)
+	_, err = senderNode.postMessage(symkeyID1, topic, 4)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,7 +202,7 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	}
 
 	t.Log("Make filter")
-	msgFilterID2, err := receiverNode.makeMessageFilter(symkeyID2)
+	msgFilterID2, err := receiverNode.makeMessageFilter(symkeyID2, topic)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -262,10 +291,10 @@ func (c Cli) addSymkey(s string) (string, error) {
 }
 
 //post wisper message
-func (c Cli) postMessage(symKeyID string, ttl int) (RpcResponse, error) {
+func (c Cli) postMessage(symKeyID string, topic string, ttl int) (RpcResponse, error) {
 	r, err := makeBody(MakeRpcRequest("shh_post", []shhPost{{
 		SymKeyId:  symKeyID,
-		Topic:     "0xe00123a5",
+		Topic:     topic,
 		Payload:   "0x73656e74206265666f72652066696c7465722077617320616374697665202873796d6d657472696329",
 		PowTarget: 0.001,
 		PowTime:   1,
@@ -282,11 +311,11 @@ func (c Cli) postMessage(symKeyID string, ttl int) (RpcResponse, error) {
 	return makeRpcResponse(resp.Body)
 }
 
-func (c Cli) makeMessageFilter(symKeyID string) (string, error) {
+func (c Cli) makeMessageFilter(symKeyID string, topic string) (string, error) {
 	//make filter
 	r, err := makeBody(MakeRpcRequest("shh_newMessageFilter", []shhNewMessageFilter{{
 		SymKeyId: symKeyID,
-		Topics:   []string{"0xe00123a5"},
+		Topics:   []string{topic},
 	}}))
 	if err != nil {
 		return "", err
@@ -333,10 +362,10 @@ func makeRpcResponse(r io.Reader) (RpcResponse, error) {
 func startLocalNode(port int) {
 	args := os.Args
 	defer func() {
-		os.Args=args
+		os.Args = args
 	}()
 
-	os.Args = append(args, []string{"-httpport="+strconv.Itoa(port), "-http=true"}...)
+	os.Args = append(args, []string{"-httpport=" + strconv.Itoa(port), "-http=true", "-bootstrap=false"}...)
 	go main()
 	time.Sleep(time.Second)
 }
