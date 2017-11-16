@@ -12,6 +12,7 @@ import (
 	"runtime"
 	"testing"
 	"time"
+	"strconv"
 )
 
 //see api at https://github.com/ethereum/go-ethereum/wiki/Whisper-v5-RPC-API
@@ -80,7 +81,7 @@ func TestGetWhisperMessage(t *testing.T) {
 	n2 := Cli{addr: "http://localhost:8536"}
 
 	t.Log("Start nodes")
-	initNode()
+	startLocalNode(8536)
 	closeCh := make(chan struct{})
 	doneFn := startNode(closeCh, "-httpport=8537", "-http=true", "-datadir=w1")
 	time.Sleep(4 * time.Second)
@@ -133,7 +134,7 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	_ = nMail
 
 	t.Log("Start nodes")
-	initNode()
+	startLocalNode(8536)
 	closeCh := make(chan struct{})
 	doneFn := startNode(closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2")
 	time.Sleep(4 * time.Second)
@@ -311,9 +312,13 @@ func makeRpcResponse(r io.Reader) (RpcResponse, error) {
 	return rsp, err
 }
 
-func initNode() {
+func startLocalNode(port int) {
 	args := os.Args
-	os.Args = append(args, []string{"-httpport=8536", "-http=true"}...)
+	defer func() {
+		os.Args=args
+	}()
+
+	os.Args = append(args, []string{"-httpport="+strconv.Itoa(port), "-http=true"}...)
 	go main()
 	time.Sleep(time.Second)
 }
