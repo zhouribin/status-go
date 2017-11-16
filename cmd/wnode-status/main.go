@@ -33,6 +33,8 @@ var (
 	firebaseAuth   = flag.String("firebaseauth", "", "FCM Authorization Key used for sending Push Notifications")
 )
 
+var backend *api.StatusBackend
+
 func main() {
 	flag.Parse()
 
@@ -49,7 +51,7 @@ func main() {
 		}
 	}
 
-	backend := api.NewStatusBackend()
+	backend = api.NewStatusBackend()
 	started, err := backend.StartNode(config)
 	if err != nil {
 		log.Fatalf("Node start failed: %v", err)

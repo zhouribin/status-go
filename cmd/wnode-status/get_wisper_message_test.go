@@ -128,15 +128,17 @@ func TestGetWhisperMessage(t *testing.T) {
 }
 
 func TestGetWhisperMessageMailServer(t *testing.T) {
-	n1 := Cli{addr: "http://localhost:8536"}
-	n2 := Cli{addr: "http://localhost:8537"}
+	senderNode := Cli{addr: "http://localhost:8537"}
+	receiverNode := Cli{addr: "http://localhost:8536"}
 	nMail := Cli{addr: "http://localhost:8538"}
 	_ = nMail
 
 	t.Log("Start nodes")
-	startLocalNode(8536)
 	closeCh := make(chan struct{})
-	doneFn := startNode(closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2")
+	doneFn := composeNodesClose(
+		startNode(closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
+		startNode(closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+	)
 	time.Sleep(4 * time.Second)
 	defer func() {
 		close(closeCh)
@@ -144,42 +146,58 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	}()
 
 	t.Log("Create symkeyID1")
-	symkeyID1, err := n1.createSymkey()
+	symkeyID1, err := senderNode.createSymkey()
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Log("post message to 1")
-	_, err = n1.postMessage(symkeyID1, 4)
+	_, err = senderNode.postMessage(symkeyID1, 4)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	time.Sleep(10 * time.Second)
 	// start receiver node
-	doneFnNode2 := startNode(closeCh, "-httpport=8537", "-http=true", "-datadir=w1")
+	startLocalNode(8536)
 	time.Sleep(4 * time.Second)
-	doneFn = composeNodesClose(doneFnNode2, doneFn)
 
-	symkey, err := n1.getSymkey(symkeyID1)
+	symkey, err := senderNode.getSymkey(symkeyID1)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	symkeyID2, err := n2.addSymkey(symkey)
+	symkeyID2, err := receiverNode.addSymkey(symkey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Log("Make filter")
-	msgFilterID2, err := n2.makeMessageFilter(symkeyID2)
+	msgFilterID2, err := receiverNode.makeMessageFilter(symkeyID2)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	time.Sleep(1 * time.Second)
 	t.Log("get message 1 from 2")
-	r, err := n2.getFilterMessages(msgFilterID2)
+	r, err := receiverNode.getFilterMessages(msgFilterID2)
+	if len(r.Result.([]interface{})) != 0 {
+		t.Fatal("Has got a messages")
+	}
+	t.Log(err, r)
+
+	w, _ := backend.NodeManager().WhisperService()
+	_ = w
+	//mailServerEnode := "enode://0edb0d71a3dbe928e154fcb696ffbda359b153a90efc2b46f0043ce9f5dbe55b77b9328fd841a1db5273758624afadd5b39638d4c35b36b3a96e1a586c1b4c2a@127.0.0.1:30379"
+	go func() {
+		//err = requestExpiredMessagesLoop(w, "e00123a5", mailServerEnode, "asdfasdf", 0, 1510769730, closeCh)
+		t.Fatal("error in requestExpiredMessagesLoop", err)
+	}()
+
+	time.Sleep(5 * time.Second)
+
+	t.Log("get message 1 from 2")
+	r, err = receiverNode.getFilterMessages(msgFilterID2)
 	if len(r.Result.([]interface{})) == 0 {
 		t.Fatal("Hasnt got any messages")
 	}
