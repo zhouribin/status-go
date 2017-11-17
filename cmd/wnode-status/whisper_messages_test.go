@@ -80,9 +80,6 @@ func MakeRpcRequest(method string, params interface{}) RpcRequest {
 }
 
 func TestAliceSendMessageToBobWithSymkeyAndTopicAndBobReceiveThisMessage_Success(t *testing.T) {
-	os.Setenv("ACCOUNT_PASSWORD", "F796da56718FAD1_dd5214F4-43B358A")
-	defer os.Unsetenv("ACCOUNT_PASSWORD")
-
 	alice := Cli{addr: "http://localhost:8536"}
 	bob := Cli{addr: "http://localhost:8537"}
 
@@ -255,6 +252,62 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	}
 	t.Log(err, r)
 
+}
+func TestAliceSendsMessageAndMessageExistsOnMailserverNode(t *testing.T) {
+	alice := Cli{addr: "http://localhost:8537"}
+	nMail := Cli{addr: "http://localhost:8538"}
+
+	t.Log("Create topic")
+	topic := whisperv5.BytesToTopic([]byte("TestAliceSendsMessageAndMessageExistsOnMailserverNode topic "))
+
+	t.Log("Start nodes")
+	closeCh := make(chan struct{})
+	doneFn := composeNodesClose(
+		startNode(closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
+		startNode(closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+	)
+	time.Sleep(4 * time.Second)
+	defer func() {
+		close(closeCh)
+		doneFn()
+	}()
+
+	t.Log("Alice create symkey")
+	symkeyID1, err := alice.createSymkey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Alice send message to topic")
+	_, err = alice.postMessage(symkeyID1, topic.String(), 4)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Alice get symkey by symkeyID")
+	symkey, err := alice.getSymkey(symkeyID1)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Alice add symkey to mailserver")
+	symkeyIDMailserver, err := nMail.addSymkey(symkey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Alice make filter on mailserver")
+	msgFilterID2, err := nMail.makeMessageFilter(symkeyIDMailserver, topic.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(time.Second)
+	t.Log("Check messages by filter")
+	r, err := nMail.getFilterMessages(msgFilterID2)
+	if len(r.Result.([]interface{})) == 0 {
+		t.Fatal("Hasn't got a messages")
+	}
 }
 
 type Cli struct {
