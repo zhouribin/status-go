@@ -3,13 +3,14 @@ package main
 import (
 	"crypto/ecdsa"
 	"encoding/binary"
-	"encoding/hex"
+	//"encoding/hex"
 	"time"
 
 	"fmt"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
+	"testing"
 )
 
 var nodeid *ecdsa.PrivateKey
@@ -32,34 +33,47 @@ func getNodeID(shh *whisper.Whisper) *ecdsa.PrivateKey {
 	return nodeid
 }
 
-func requestExpiredMessagesLoop(shh *whisper.Whisper, topic, mailServerEnode, password string, timeLow, timeUpp uint32, closeCh chan struct{}) error {
+func requestExpiredMessagesLoop(shh *whisper.Whisper, topic whisper.TopicType, mailServerEnode, password string, keyID string, timeLow, timeUpp uint32, closeCh chan struct{}, t *testing.T) error {
 	var key, mailServerPeerID []byte
 	var xt, empty whisper.TopicType
 
-	fmt.Println("Time:", timeLow, timeUpp)
+	t.Log("Time:", timeLow, timeUpp)
 
-	keyID, err := shh.AddSymKeyFromPassword(password)
-	if err != nil {
-		return fmt.Errorf("Failed to create symmetric key for mail request: %s", err)
-	}
-	key, err = shh.GetSymKey(keyID)
+	t.Log("Add symkey from password")
+
+	//b,err:=hex.DecodeString(symkey[2:])
+	//if err != nil {
+	//	return fmt.Errorf("Failed to decode symmetric key: %s", err)
+	//}
+
+	//keyID, err := shh.AddSymKeyDirect(b)
+	//keyID, err := shh.AddSymKeyFromPassword(password)
+	//if err != nil {
+	//	return fmt.Errorf("Failed to create symmetric key for mail request: %s", err)
+	//}
+
+	t.Log("Add symkey by id")
+	key, err := shh.GetSymKey(keyID)
 	if err != nil {
 		return fmt.Errorf("Failed to save symmetric key for mail request: %s", err)
 	}
 
-	key, err = shh.GetSymKey("77d185965daa460ee7a8cb44f6001bb9884a04ed27a49ba6ea0f81cd4e5ac40b")
+	//key, err = shh.GetSymKey("77d185965daa460ee7a8cb44f6001bb9884a04ed27a49ba6ea0f81cd4e5ac40b")
 	fmt.Println("_____________________________________", string(key), keyID)
 
+	t.Log("extractIdFromEnode")
 	mailServerPeerID, err = extractIdFromEnode(mailServerEnode)
 	if err != nil {
 		return err
 	}
 
+	t.Log("Add peer to trusted")
 	err = shh.AllowP2PMessagesFromPeer(mailServerPeerID)
 	if err != nil {
 		return err
 	}
 
+	t.Log("Start sender cycle")
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
 	for {
@@ -67,13 +81,13 @@ func requestExpiredMessagesLoop(shh *whisper.Whisper, topic, mailServerEnode, pa
 		case <-closeCh:
 			return nil
 		case <-ticker.C:
-			if len(topic) >= whisper.TopicLength*2 {
-				x, err := hex.DecodeString(topic)
-				if err != nil {
-					return fmt.Errorf("Failed to parse the topic: %s", err)
-				}
-				xt = whisper.BytesToTopic(x)
-			}
+			//if len(topic) >= whisper.TopicLength*2 {
+			//	x, err := hex.DecodeString(topic)
+			//	if err != nil {
+			//		return fmt.Errorf("Failed to parse the topic: %s", err)
+			//	}
+			//	xt = whisper.BytesToTopic(x)
+			//}
 			if timeUpp == 0 {
 				timeUpp = 0xFFFFFFFF
 			}
@@ -81,7 +95,7 @@ func requestExpiredMessagesLoop(shh *whisper.Whisper, topic, mailServerEnode, pa
 			data := make([]byte, 8+whisper.TopicLength)
 			binary.BigEndian.PutUint32(data, timeLow)
 			binary.BigEndian.PutUint32(data[4:], timeUpp)
-			copy(data[8:], xt[:])
+			copy(data[8:], topic[:])
 			if xt == empty {
 				data = data[:8]
 			}

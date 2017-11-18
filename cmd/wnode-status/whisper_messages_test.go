@@ -52,6 +52,34 @@ type shhNewMessageFilter struct {
 	AllowP2P bool     `json:"allowP2P"`
 }
 
+//{"jsonrpc": "2.0", "method": "admin_nodeInfo", "params": [], "id": 9999999999}
+/*
+{
+	"id": "5db6b0e6f9bc762b76b4a50180b2f35c22ab12bf465d805958340800b070bd364f9ec40fe1f76db780baad1cbab96b7a60e02f106daf3cf9a1de77d326888741",
+	"name": "StatusIM/v0.9.9-unstable/linux-amd64/go1.8.3",
+	"enode": "enode://5db6b0e6f9bc762b76b4a50180b2f35c22ab12bf465d805958340800b070bd364f9ec40fe1f76db780baad1cbab96b7a60e02f106daf3cf9a1de77d326888741@[::]:30303?discport=0",
+	"ip": "::",
+	"ports": {
+		"discovery": 0,
+		"listener": 30303
+	},
+	"listenAddr": "[::]:30303",
+	"protocols": {
+		"shh": {
+			"maxMessageSize": 1048576,
+			"minimumPoW": 0.001,
+			"version": "5.0"
+		}
+	}
+}
+
+ */
+type adminNodeInfo struct {
+	Id string `json:"id"`
+	Name string `json:"name"`
+	Enode string `json:"enode"`
+}
+
 type RpcRequest struct {
 	Version string      `json:"jsonrpc"`
 	Method  string      `json:"method"`
@@ -155,11 +183,14 @@ func TestAliceSendMessageToBobWithSymkeyAndTopicAndBobReceiveThisMessage_Success
 }
 
 func TestGetWhisperMessageMailServer(t *testing.T) {
-	senderNode := Cli{addr: "http://localhost:8537"}
-	receiverNode := Cli{addr: "http://localhost:8536"}
+	os.Setenv("ACCOUNT_PASSWORD","F796da56718FAD1_dd5214F4-43B358A")
+	defer os.Unsetenv("ACCOUNT_PASSWORD")
+
+	alice := Cli{addr: "http://localhost:8537"}
+	bob := Cli{addr: "http://localhost:8536"}
 	nMail := Cli{addr: "http://localhost:8538"}
 	_ = nMail
-	topic := "0xe00123a5"
+	topic := whisperv5.BytesToTopic([]byte("TestGetWhisperMessageMailServer topic name"))
 
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
@@ -173,55 +204,73 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 		doneFn()
 	}()
 
-	t.Log("Create symkeyID1")
-	symkeyID1, err := senderNode.createSymkey()
+	t.Log("Alice create symkey")
+	aliceSymkeyID, err := alice.createSymkey()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Log("post message to 1")
-	_, err = senderNode.postMessage(symkeyID1, topic, 4)
+	t.Log("Alice send message to bob")
+	_, err = alice.postMessage(aliceSymkeyID, topic.String(), 4)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	t.Log("Wait that Alice message is being expired")
 	time.Sleep(10 * time.Second)
-	// start receiver node
+
+	t.Log("Start bob node")
 	startLocalNode(8536)
 	time.Sleep(4 * time.Second)
 
-	symkey, err := senderNode.getSymkey(symkeyID1)
+	t.Log("Get alice symkey")
+	symkey, err := alice.getSymkey(aliceSymkeyID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	symkeyID2, err := receiverNode.addSymkey(symkey)
+	t.Log("Bob add symkey to his node")
+	symkeyID2, err := bob.addSymkey(symkey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Log("Make filter")
-	msgFilterID2, err := receiverNode.makeMessageFilter(symkeyID2, topic)
+	t.Log("Bob makes filter on his node")
+	msgFilterID2, err := bob.makeMessageFilter(symkeyID2, topic.String())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	time.Sleep(1 * time.Second)
-	t.Log("get message 1 from 2")
-	r, err := receiverNode.getFilterMessages(msgFilterID2)
+	t.Log("Bob check messages. There are no messages")
+	r, err := bob.getFilterMessages(msgFilterID2)
 	if len(r.Result.([]interface{})) != 0 {
 		t.Fatal("Has got a messages")
 	}
 	t.Log(err, r)
 
-	w, _ := backend.NodeManager().WhisperService()
-	mailServerEnode := "enode://7ef1407cccd16c90d01bfd8245b4b93c2f78e7d19769dc310cf46628d614d8aa7259005ef532d426092fa14ef0010ff7d83d5bfd108614d447b0b07499ffda78@127.0.0.1:30303"
+	nMailKeyID,err:=nMail.addSymkey(symkey)
+	if err != nil {
+		t.Fatal(err)
+	}
 
+
+
+	info,err:=nMail.getNodeInfo()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mailServerEnode:=info["enode"].(string)
+
+	t.Log("Add mailserver peer to bob node")
+	//todo(boris) investigate requirement
 	err = backend.NodeManager().AddPeer(mailServerEnode)
 	if err != nil {
 		t.Fatal(err)
 	}
 
+	t.Log("Add mailserver peer to bob node too??")
+	//todo(boris) investigate requirement
 	n, err := backend.NodeManager().Node()
 	if err != nil {
 		t.Fatal(err)
@@ -232,25 +281,31 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 		t.Fatal(err)
 	}
 	n.Server().AddPeer(mailNode)
-
 	time.Sleep(5 * time.Second)
+
+
+	t.Log("Get bob node whisper service")
+	w, _ := backend.NodeManager().WhisperService()
+
+
 	go func() {
-		err = requestExpiredMessagesLoop(w, topic[2:], mailServerEnode, "asdfasdf",
-			0, uint32(time.Now().Add(2*time.Minute).Unix()), closeCh)
+		t.Log("Request expired messages from bob node")
+		err = requestExpiredMessagesLoop(w, topic, mailServerEnode, "asdfasdf", nMailKeyID,
+			0, uint32(time.Now().Add(2*time.Minute).Unix()), closeCh, t)
 
 		if err != nil {
 			t.Fatal("error in requestExpiredMessagesLoop", err)
 		}
 	}()
 
-	time.Sleep(60 * time.Second)
+	time.Sleep(30 * time.Second)
 
-	t.Log("get message 1 from 2")
-	r, err = receiverNode.getFilterMessages(msgFilterID2)
+	t.Log("Bob get alice message which sent from mailbox")
+	r, err = bob.getFilterMessages(msgFilterID2)
+	t.Log(err, r)
 	if len(r.Result.([]interface{})) == 0 {
 		t.Fatal("Hasnt got any messages")
 	}
-	t.Log(err, r)
 
 }
 func TestAliceSendsMessageAndMessageExistsOnMailserverNode(t *testing.T) {
@@ -422,6 +477,41 @@ func (c Cli) getFilterMessages(msgFilterID string) (RpcResponse, error) {
 		return RpcResponse{}, err
 	}
 	return makeRpcResponse(resp.Body)
+}
+
+func (c Cli) getNodeInfo() (map[string]interface{}, error) {
+	r, err := makeBody(MakeRpcRequest("admin_nodeInfo", []string{}))
+	if err != nil {
+		return nil, err
+	}
+
+	resp, err := c.c.Post(c.addr, "application/json", r)
+	if err != nil {
+		return nil, err
+	}
+	rsp,err:=makeRpcResponse(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+	return rsp.Result.(map[string]interface{}), nil
+}
+
+//curl -X POST --data '{"jsonrpc":"2.0","method":"shh_markTrustedPeer","params":["enode://d25474361659861e9e651bc728a17e807a3359ca0d344afd544ed0f11a31faecaf4d74b55db53c6670fd624f08d5c79adfc8da5dd4a11b9213db49a3b750845e@52.178.209.125:30379"],"id":1}'
+func (c Cli) markTrusted(enode string) (RpcResponse, error) {
+	r, err := makeBody(MakeRpcRequest("shh_markTrustedPeer", []string{enode}))
+	if err != nil {
+		return RpcResponse{}, err
+	}
+
+	resp, err := c.c.Post(c.addr, "application/json", r)
+	if err != nil {
+		return RpcResponse{}, err
+	}
+	rsp,err:=makeRpcResponse(resp.Body)
+	if err != nil {
+		return RpcResponse{}, err
+	}
+	return rsp, nil
 }
 
 func makeBody(r RpcRequest) (io.Reader, error) {

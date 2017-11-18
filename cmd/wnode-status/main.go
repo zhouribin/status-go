@@ -43,7 +43,8 @@ func main() {
 		log.Fatalf("Making config failed: %v", err)
 	}
 
-	mailNode := "enode://7ef1407cccd16c90d01bfd8245b4b93c2f78e7d19769dc310cf46628d614d8aa7259005ef532d426092fa14ef0010ff7d83d5bfd108614d447b0b07499ffda78@127.0.0.1:30303"
+	mailNode := "enode://859bc9f0919a8bffa5a73bb8f55997aa990bf38771dd09b037db37c9efc311fc069ba146511c2b0a98bff14ed29f46982872c64b59da0f0eee0a9edaac17f599@[::]:39544?discport=0"
+	//mailNode := "enode://7ef1407cccd16c90d01bfd8245b4b93c2f78e7d19769dc310cf46628d614d8aa7259005ef532d426092fa14ef0010ff7d83d5bfd108614d447b0b07499ffda78@127.0.0.1:30303"
 	config.BootClusterConfig.BootNodes = append([]string{mailNode}, config.BootClusterConfig.BootNodes...)
 
 	printHeader(config)
@@ -63,6 +64,11 @@ func main() {
 
 	// wait till node is started
 	<-started
+	if *mailserver==true{
+		n1,_:=backend.NodeManager().Node()
+		fmt.Printf("------------------------n1.Server().NodeInfo().Enode: '%s'", n1.Server().NodeInfo().Enode)
+	}
+
 
 	if *injectAccounts {
 		if err := InjectTestAccounts(backend.NodeManager()); err != nil {
