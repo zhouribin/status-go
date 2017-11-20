@@ -5,12 +5,12 @@ import (
 	"encoding/binary"
 	"time"
 
+	"encoding/hex"
 	"fmt"
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"testing"
-	"encoding/hex"
 )
 
 var nodeid *ecdsa.PrivateKey

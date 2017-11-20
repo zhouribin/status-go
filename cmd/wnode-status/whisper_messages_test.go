@@ -17,7 +17,6 @@ import (
 	"time"
 	//"encoding/hex"
 	"encoding/binary"
-
 )
 
 //see api at https://github.com/ethereum/go-ethereum/wiki/Whisper-v5-RPC-API
@@ -76,10 +75,10 @@ type shhNewMessageFilter struct {
 	}
 }
 
- */
+*/
 type adminNodeInfo struct {
-	Id string `json:"id"`
-	Name string `json:"name"`
+	Id    string `json:"id"`
+	Name  string `json:"name"`
 	Enode string `json:"enode"`
 }
 
@@ -195,8 +194,8 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("mailserver",closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
-		startNode("alice",closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("mailserver", closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
+		startNode("alice", closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
 	defer func() {
@@ -250,19 +249,16 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	}
 	t.Log(err, r)
 
-
-	mNodeInfo,err:=nMail.getNodeInfo()
+	mNodeInfo, err := nMail.getNodeInfo()
 	if err != nil {
 		t.Fatal(err)
 	}
-	bobNodeInfo,err:=bob.getNodeInfo()
+	bobNodeInfo, err := bob.getNodeInfo()
 	if err != nil {
 		t.Fatal(err)
 	}
-	bobEnode:=bobNodeInfo["enode"].(string)
-	mailServerEnode:= mNodeInfo["enode"].(string)
-
-
+	bobEnode := bobNodeInfo["enode"].(string)
+	mailServerEnode := mNodeInfo["enode"].(string)
 
 	t.Log("Add mailserver peer to bob node")
 	//todo(boris) investigate requirement
@@ -286,20 +282,17 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	time.Sleep(5 * time.Second)
 
 	t.Log("Mark bob as mailserver trusted")
-	rsp,err:=nMail.markTrusted(bobEnode)
-	t.Log(rsp,err)
+	rsp, err := nMail.markTrusted(bobEnode)
+	t.Log(rsp, err)
 
-	rsp,err=bob.markTrusted(mailServerEnode)
-	t.Log(rsp,err)
-
-
+	rsp, err = bob.markTrusted(mailServerEnode)
+	t.Log(rsp, err)
 
 	t.Log("Get bob node whisper service")
 	w, _ := backend.NodeManager().WhisperService()
 
-	timeLow:=uint32(time.Now().Add(2*time.Minute).Unix())
-	timeUpp:=uint32(time.Now().Add(-2*time.Minute).Unix())
-
+	timeLow := uint32(time.Now().Add(2 * time.Minute).Unix())
+	timeUpp := uint32(time.Now().Add(-2 * time.Minute).Unix())
 
 	var key, mailServerPeerID []byte
 
@@ -393,7 +386,7 @@ func TestAliceSendsMessageAndMessageExistsOnMailserverNode(t *testing.T) {
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("mailserver",closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
+		startNode("mailserver", closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
 		startNode("alice", closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
@@ -564,7 +557,7 @@ func (c Cli) getNodeInfo() (map[string]interface{}, error) {
 	if err != nil {
 		return nil, err
 	}
-	rsp,err:=makeRpcResponse(resp.Body)
+	rsp, err := makeRpcResponse(resp.Body)
 	if err != nil {
 		return nil, err
 	}
@@ -582,7 +575,7 @@ func (c Cli) markTrusted(enode string) (RpcResponse, error) {
 	if err != nil {
 		return RpcResponse{}, err
 	}
-	rsp,err:=makeRpcResponse(resp.Body)
+	rsp, err := makeRpcResponse(resp.Body)
 	if err != nil {
 		return RpcResponse{}, err
 	}
@@ -626,7 +619,7 @@ func startNode(name string, closeCh chan struct{}, args ...string) (doneFn func(
 	cmd.Dir = getRootDir() + "/../../build/bin/"
 	fmt.Println(cmd)
 
-	f,err:=os.Create(getRootDir()+"/"+name + ".txt")
+	f, err := os.Create(getRootDir() + "/" + name + ".txt")
 	if err != nil {
 		fmt.Println(err)
 	}
