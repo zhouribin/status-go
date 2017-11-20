@@ -41,12 +41,13 @@ import (
 */
 
 type shhPost struct {
-	SymKeyId  string  `json:"symKeyID"`
-	Topic     string  `json:"topic"`
-	Payload   string  `json:"payload"`
-	PowTarget float32 `json:"powTarget"`
-	PowTime   int     `json:"powTime"`
-	TTL       int     `json:"TTL"`
+	SymKeyId   string  `json:"symKeyID"`
+	Topic      string  `json:"topic"`
+	Payload    string  `json:"payload"`
+	PowTarget  float32 `json:"powTarget"`
+	PowTime    int     `json:"powTime"`
+	TTL        int     `json:"TTL"`
+	TargetPeer string  `json:"targetPeer,omitempty"`
 }
 type shhNewMessageFilter struct {
 	SymKeyId string   `json:"symKeyID"`
@@ -160,7 +161,7 @@ func TestAliceSendMessageToBobWithSymkeyAndTopicAndBobReceiveThisMessage_Success
 	}
 
 	t.Log("Alice send message to Bob")
-	_, err = alice.postMessage(alicesymkeyID, topic.String(), 4)
+	_, err = alice.postMessage(alicesymkeyID, topic.String(), 4, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -182,6 +183,126 @@ func TestAliceSendMessageToBobWithSymkeyAndTopicAndBobReceiveThisMessage_Success
 	}
 
 	t.Log(err, r)
+}
+
+func TestAliceAndBobP2PMessagingExample_Success(t *testing.T) {
+	alice := Cli{addr: "http://localhost:8536"}
+	bob := Cli{addr: "http://localhost:8537"}
+	mailbox := Cli{addr: "http://localhost:8538"}
+
+	t.Log("Start nodes")
+	startLocalNode(8536)
+
+	closeCh := make(chan struct{})
+	doneFn := composeNodesClose(
+		startNode("mailserver", closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
+		startNode("bob", closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+	)
+	time.Sleep(4 * time.Second)
+
+	defer func() {
+		close(closeCh)
+		doneFn()
+	}()
+
+	t.Log("Create symkey and get alicesymkeyID")
+	alicesymkeyID, err := alice.createSymkey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Create topic")
+	topic := whisperv5.BytesToTopic([]byte("some topic TestAliceSendMessageToBobPeerWithSymkeyAndTopicAndBobReceiveThisMessage_AtMailboxNodeMessageDontExist_Success"))
+
+	t.Log("Get symkey by alicesymkeyID")
+	symkey, err := alice.getSymkey(alicesymkeyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("alice send to bob symkey and topic: %v  -  %v", topic, symkey)
+
+	t.Log("Get symkey to bob node and get bobsymkeyID")
+	bobSymkeyID, err := bob.addSymkey(symkey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	mailboxSymkeyID, err := mailbox.addSymkey(symkey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Make alice filter for topic")
+	aliceMsgFilterID, err := alice.makeMessageFilter(alicesymkeyID, topic.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Make bob filter for topic")
+	bobMsgFilterID, err := bob.makeMessageFilter(bobSymkeyID, topic.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Make mailbox filter for topic")
+	mailboxMsgFilterID, err := mailbox.makeMessageFilter(mailboxSymkeyID, topic.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bobNodeInfo, err := bob.getNodeInfo()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bobEnode := bobNodeInfo["enode"].(string)
+
+	aliceNodeInfo, err := alice.getNodeInfo()
+	if err != nil {
+		t.Fatal(err)
+	}
+	aliceEnode := aliceNodeInfo["enode"].(string)
+
+	t.Log("Adding to trusted peers")
+	r, err := alice.adminAddPeer(bobEnode)
+	t.Log(r, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(time.Second)
+	r, err = bob.markTrusted(aliceEnode)
+	t.Log(r, err)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Alice send message to Bob")
+	_, err = alice.postMessage(alicesymkeyID, topic.String(), 4, bobEnode)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//wait message
+	time.Sleep(time.Second)
+
+	t.Log("Bob get message")
+	r, err = bob.getFilterMessages(bobMsgFilterID)
+	if len(r.Result.([]interface{})) == 0 {
+		t.Fatal("Hasnt got any messages for bob")
+	}
+	t.Log(err, r)
+
+	t.Log("Mailbox try to find message")
+	r, err = mailbox.getFilterMessages(mailboxMsgFilterID)
+	if len(r.Result.([]interface{})) != 0 {
+		t.Fatal("Has messages at mailbox node")
+	}
+
+	t.Log("Alice try to find message")
+	r, err = alice.getFilterMessages(aliceMsgFilterID)
+	if len(r.Result.([]interface{})) != 0 {
+		t.Fatal("Has messages at alice node")
+	}
 }
 
 func TestGetWhisperMessageMailServer(t *testing.T) {
@@ -211,7 +332,7 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	}
 
 	t.Log("Alice send message to bob")
-	_, err = alice.postMessage(aliceSymkeyID, topic.String(), 4)
+	_, err = alice.postMessage(aliceSymkeyID, topic.String(), 4, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -402,7 +523,7 @@ func TestAliceSendsMessageAndMessageExistsOnMailserverNode(t *testing.T) {
 	}
 
 	t.Log("Alice send message to topic")
-	_, err = alice.postMessage(symkeyID1, topic.String(), 4)
+	_, err = alice.postMessage(symkeyID1, topic.String(), 4, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -491,14 +612,15 @@ func (c Cli) addSymkey(s string) (string, error) {
 }
 
 //post wisper message
-func (c Cli) postMessage(symKeyID string, topic string, ttl int) (RpcResponse, error) {
+func (c Cli) postMessage(symKeyID string, topic string, ttl int, targetPeer string) (RpcResponse, error) {
 	r, err := makeBody(MakeRpcRequest("shh_post", []shhPost{{
-		SymKeyId:  symKeyID,
-		Topic:     topic,
-		Payload:   "0x73656e74206265666f72652066696c7465722077617320616374697665202873796d6d657472696329",
-		PowTarget: 0.001,
-		PowTime:   1,
-		TTL:       ttl,
+		SymKeyId:   symKeyID,
+		Topic:      topic,
+		Payload:    "0x73656e74206265666f72652066696c7465722077617320616374697665202873796d6d657472696329",
+		PowTarget:  0.001,
+		PowTime:    1,
+		TTL:        ttl,
+		TargetPeer: targetPeer,
 	}}))
 	if err != nil {
 		return RpcResponse{}, err
@@ -562,6 +684,22 @@ func (c Cli) getNodeInfo() (map[string]interface{}, error) {
 		return nil, err
 	}
 	return rsp.Result.(map[string]interface{}), nil
+}
+func (c Cli) adminAddPeer(enode string) (RpcResponse, error) {
+	r, err := makeBody(MakeRpcRequest("admin_addPeer", []string{enode}))
+	if err != nil {
+		return RpcResponse{}, err
+	}
+
+	resp, err := c.c.Post(c.addr, "application/json", r)
+	if err != nil {
+		return RpcResponse{}, err
+	}
+	rsp, err := makeRpcResponse(resp.Body)
+	if err != nil {
+		return RpcResponse{}, err
+	}
+	return rsp, nil
 }
 
 //curl -X POST --data '{"jsonrpc":"2.0","method":"shh_markTrustedPeer","params":["enode://d25474361659861e9e651bc728a17e807a3359ca0d344afd544ed0f11a31faecaf4d74b55db53c6670fd624f08d5c79adfc8da5dd4a11b9213db49a3b750845e@52.178.209.125:30379"],"id":1}'
