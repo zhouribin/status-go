@@ -64,11 +64,10 @@ func main() {
 
 	// wait till node is started
 	<-started
-	if *mailserver==true{
-		n1,_:=backend.NodeManager().Node()
+	if *mailserver == true {
+		n1, _ := backend.NodeManager().Node()
 		fmt.Printf("------------------------n1.Server().NodeInfo().Enode: '%s'", n1.Server().NodeInfo().Enode)
 	}
-
 
 	if *injectAccounts {
 		if err := InjectTestAccounts(backend.NodeManager()); err != nil {
