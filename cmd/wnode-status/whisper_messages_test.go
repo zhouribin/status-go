@@ -15,6 +15,9 @@ import (
 	"strconv"
 	"testing"
 	"time"
+	//"encoding/hex"
+	"encoding/binary"
+
 )
 
 //see api at https://github.com/ethereum/go-ethereum/wiki/Whisper-v5-RPC-API
@@ -90,7 +93,7 @@ type RpcRequest struct {
 type RpcResponse struct {
 	Version string      `json:"jsonrpc"`
 	Result  interface{} `json:"result"`
-	Error   rpcError    `json:"params"`
+	Error   rpcError    `json:"error"`
 	Id      int         `json:"id"`
 }
 type rpcError struct {
@@ -116,7 +119,7 @@ func TestAliceSendMessageToBobWithSymkeyAndTopicAndBobReceiveThisMessage_Success
 
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode(closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("bob", closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
 
@@ -183,9 +186,6 @@ func TestAliceSendMessageToBobWithSymkeyAndTopicAndBobReceiveThisMessage_Success
 }
 
 func TestGetWhisperMessageMailServer(t *testing.T) {
-	os.Setenv("ACCOUNT_PASSWORD","F796da56718FAD1_dd5214F4-43B358A")
-	defer os.Unsetenv("ACCOUNT_PASSWORD")
-
 	alice := Cli{addr: "http://localhost:8537"}
 	bob := Cli{addr: "http://localhost:8536"}
 	nMail := Cli{addr: "http://localhost:8538"}
@@ -195,8 +195,8 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode(closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
-		startNode(closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("mailserver",closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
+		startNode("alice",closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
 	defer func() {
@@ -205,6 +205,7 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	}()
 
 	t.Log("Alice create symkey")
+	time.Sleep(time.Millisecond)
 	aliceSymkeyID, err := alice.createSymkey()
 	if err != nil {
 		t.Fatal(err)
@@ -249,18 +250,19 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	}
 	t.Log(err, r)
 
-	nMailKeyID,err:=nMail.addSymkey(symkey)
+
+	mNodeInfo,err:=nMail.getNodeInfo()
 	if err != nil {
 		t.Fatal(err)
 	}
-
-
-
-	info,err:=nMail.getNodeInfo()
+	bobNodeInfo,err:=bob.getNodeInfo()
 	if err != nil {
 		t.Fatal(err)
 	}
-	mailServerEnode:=info["enode"].(string)
+	bobEnode:=bobNodeInfo["enode"].(string)
+	mailServerEnode:= mNodeInfo["enode"].(string)
+
+
 
 	t.Log("Add mailserver peer to bob node")
 	//todo(boris) investigate requirement
@@ -283,26 +285,99 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	n.Server().AddPeer(mailNode)
 	time.Sleep(5 * time.Second)
 
+	t.Log("Mark bob as mailserver trusted")
+	rsp,err:=nMail.markTrusted(bobEnode)
+	t.Log(rsp,err)
+
+	rsp,err=bob.markTrusted(mailServerEnode)
+	t.Log(rsp,err)
+
+
 
 	t.Log("Get bob node whisper service")
 	w, _ := backend.NodeManager().WhisperService()
 
+	timeLow:=uint32(time.Now().Add(2*time.Minute).Unix())
+	timeUpp:=uint32(time.Now().Add(-2*time.Minute).Unix())
 
-	go func() {
-		t.Log("Request expired messages from bob node")
-		err = requestExpiredMessagesLoop(w, topic, mailServerEnode, "asdfasdf", nMailKeyID,
-			0, uint32(time.Now().Add(2*time.Minute).Unix()), closeCh, t)
 
-		if err != nil {
-			t.Fatal("error in requestExpiredMessagesLoop", err)
-		}
-	}()
+	var key, mailServerPeerID []byte
 
-	time.Sleep(30 * time.Second)
+	t.Log("Time:", timeLow, timeUpp)
 
+	t.Log("Add symkey from password")
+
+	keyID, err := w.AddSymKeyFromPassword("asdfasdf")
+	if err != nil {
+		t.Fatalf("Failed to create symmetric key for mail request: %s", err)
+	}
+
+	t.Log("Add symkey by id")
+	key, err = w.GetSymKey(keyID)
+	if err != nil {
+		t.Fatalf("Failed to save symmetric key for mail request: %s", err)
+	}
+
+	t.Log("extractIdFromEnode")
+	mailServerPeerID, err = extractIdFromEnode(mailServerEnode)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//t.Log("Add peer to trusted")
+	//err = w.AllowP2PMessagesFromPeer(mailServerPeerID)
+	//if err != nil {
+	//	return err
+	//}
+	//
+
+	data := make([]byte, 8+whisperv5.TopicLength)
+	binary.BigEndian.PutUint32(data, timeLow)
+	binary.BigEndian.PutUint32(data[4:], timeUpp)
+	copy(data[8:], topic[:])
+	//if xt == empty {
+	//	data = data[:8]
+	//}
+
+	var params whisperv5.MessageParams
+	params.PoW = 1
+	params.Payload = data
+	params.KeySym = key
+	params.Src = getNodeID(w)
+	params.WorkTime = 5
+
+	msg, err := whisperv5.NewSentMessage(&params)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	env, err := msg.Wrap(&params)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(time.Second)
+
+	err = w.RequestHistoricMessages(mailServerPeerID, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	//if len(topic) >= whisper.TopicLength*2 {
+	//	x, err := hex.DecodeString(topic)
+	//	if err != nil {
+	//		return fmt.Errorf("Failed to parse the topic: %s", err)
+	//	}
+	//	xt = whisper.BytesToTopic(x)
+	//}
+	//if timeUpp == 0 {
+	//	timeUpp = 0xFFFFFFFF
+
+	time.Sleep(time.Second)
 	t.Log("Bob get alice message which sent from mailbox")
 	r, err = bob.getFilterMessages(msgFilterID2)
 	t.Log(err, r)
+	//time.Sleep(10*time.Minute)
 	if len(r.Result.([]interface{})) == 0 {
 		t.Fatal("Hasnt got any messages")
 	}
@@ -318,8 +393,8 @@ func TestAliceSendsMessageAndMessageExistsOnMailserverNode(t *testing.T) {
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode(closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
-		startNode(closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("mailserver",closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
+		startNode("alice", closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
 	defer func() {
@@ -546,14 +621,19 @@ func composeNodesClose(doneFns ...func()) func() {
 	}
 }
 
-func startNode(closeCh chan struct{}, args ...string) (doneFn func()) {
+func startNode(name string, closeCh chan struct{}, args ...string) (doneFn func()) {
 	cmd := exec.Command("./wnode-status", args...)
 	cmd.Dir = getRootDir() + "/../../build/bin/"
 	fmt.Println(cmd)
 
-	cmd.Stderr = os.Stdout
-	cmd.Stdout = os.Stdout
-	err := cmd.Start()
+	f,err:=os.Create(getRootDir()+"/"+name + ".txt")
+	if err != nil {
+		fmt.Println(err)
+	}
+
+	cmd.Stderr = f
+	cmd.Stdout = f
+	err = cmd.Start()
 	if err != nil {
 		fmt.Println(err)
 	}
@@ -573,7 +653,7 @@ func startNode(closeCh chan struct{}, args ...string) (doneFn func()) {
 		}
 
 		fmt.Println("Killed", exitStatus.String(), args)
-
+		defer f.Close()
 		close(done)
 	}()
 
