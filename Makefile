@@ -67,6 +67,17 @@ xgo:
 	docker pull farazdagi/xgo
 	go get github.com/karalabe/xgo
 
+gomobile-install:
+	go get -u golang.org/x/mobile/cmd/gomobile
+
+statusgo-ios-gomobile:
+	gomobile init
+	gomobile bind --target ios --tags ios -v -o ./build/bin/Statusgo.framework github.com/status-im/status-go/mobile
+
+statusgo-android-gomobile:
+	gomobile init
+	gomobile bind --target android --tags android -v -o ./build/bin/statusgo.aar github.com/status-im/status-go/mobile
+
 statusgo-mainnet:
 	go build -i -o $(GOBIN)/statusgo -v $(shell build/mainnet-flags.sh) ./cmd/statusd
 	@echo "status go compilation done (mainnet)."
