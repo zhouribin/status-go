@@ -291,8 +291,8 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	t.Log("Get bob node whisper service")
 	w, _ := backend.NodeManager().WhisperService()
 
-	timeLow := uint32(time.Now().Add(2 * time.Minute).Unix())
-	timeUpp := uint32(time.Now().Add(-2 * time.Minute).Unix())
+	timeLow := uint32(time.Now().Add(-2 * time.Minute).Unix())
+	timeUpp := uint32(time.Now().Add(2 * time.Minute).Unix())
 
 	var key, mailServerPeerID []byte
 
@@ -347,6 +347,17 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	env, err := msg.Wrap(&params)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	decryptedEnv, err := env.OpenSymmetric(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !env.IsSymmetric() {
+		t.Fatal("envelop shold be symmetric encrypted")
+	}
+	if !bytes.Equal(decryptedEnv.Payload, data) {
+		t.Fatal("envelop payload isnt decrypted properly", decryptedEnv.Payload, data)
 	}
 
 	time.Sleep(time.Second)
