@@ -15,7 +15,11 @@ def getVersion(branch, sha, buildNumber) {
     return version
 }
 
-node('linux') {
+node('linux1') {
+	def gopath = pwd()
+	env.GOPATH = gopath
+	println("GOPATH: " + gopath)
+
     checkout scm
 
     def remoteOriginRegex = ~/^remotes\/origin\//
