@@ -16,6 +16,11 @@ def getVersion(branch, sha, buildNumber) {
 }
 
 node('linux1') {
+    env.REPO      = 'github.com/status-im/status-go'
+    env.BUILD_DIR = '__build'
+    env.GOPATH    = "${WORKSPACE}/${BUILD_DIR}"
+    env.SRC_PATH  = "${env.GOPATH}/src/${REPO}"
+
     paramBranch = env.branch ? ('*/' + env.branch) : '*/develop'
 
     checkout(
@@ -34,6 +39,19 @@ node('linux1') {
     gitShortSHA = gitSHA.take(7)
     gitBranch = sh(returnStdout: true, script: 'git name-rev --name-only HEAD').trim() - remoteOriginRegex
 
+    stage('Setup Build env') {
+        dir(env.GOPATH) {
+            deleteDir()
+
+                // Create Build-Path
+                sh "mkdir -p ${env.SRC_PATH}"
+        }
+        // Seed Build-Path
+        dir(env.WORKSPACE) {
+            sh "/usr/bin/rsync -a ./ ${env.SRC_PATH} --exclude=$BUILD_DIR"
+        }
+    }
+
     stage('Debug') {
         sh 'env'
         println(gitBranch)
@@ -47,51 +65,47 @@ node('linux1') {
     // }
 
     stage('Build') {
-        sh 'env'
-        def gopath = pwd()
-        env.GOPATH = gopath
-        println(gopath)
-        println(env.GOPATH)
-        println("pleeeease")
-        sh 'env'
+        dir(env.SRC_PATH) {
+            sh 'go get github.com/karalabe/xgo'
 
-        sh 'go get github.com/karalabe/xgo'
-
-        parallel (
-            'statusgo-android': {
-                sh 'make statusgo-android'
-            },
-            'statusgo-ios-simulator': {
-                sh '''
-                    make statusgo-ios-simulator
-                    cd build/bin/statusgo-ios-9.3-framework/
-                    zip -r status-go-ios.zip Statusgo.framework
-                '''
-            }
-        )
+            parallel (
+                'statusgo-android': {
+                    sh 'make statusgo-android'
+                },
+                'statusgo-ios-simulator': {
+                    sh '''
+                        make statusgo-ios-simulator
+                        cd build/bin/statusgo-ios-9.3-framework/
+                        zip -r status-go-ios.zip Statusgo.framework
+                    '''
+                }
+            )
+        }
     }
 
     stage('Deploy') {
-        // For branch builds, replace the old artifact. For develop keep all of them.
-        def version = gitBranch == 'develop' ? getVersion(gitBranch, gitShortSHA, '') : getVersion(gitBranch, gitShortSHA, env.BUILD_ID)
-        def server = Artifactory.server 'artifactory'
-        def uploadSpec = """{
-            "files": [
-                {
-                    "pattern": "build/bin/statusgo-android-16.aar",
-                    "target": "libs-release-local/status-im/status-go/${version}/status-go-${version}.aar"
-                },
-                {
-                    "pattern": "build/bin/statusgo-ios-9.3-framework/status-go-ios.zip",
-                    "target": "libs-release-local/status-im/status-go-ios-simulator/${version}/status-go-ios-simulator-${version}.zip"
-                }
-            ]
-        }"""
+        dir(env.SRC_PATH) {
+            // For branch builds, replace the old artifact. For develop keep all of them.
+            def version = gitBranch == 'develop' ? getVersion(gitBranch, gitShortSHA, '') : getVersion(gitBranch, gitShortSHA, env.BUILD_ID)
+            def server = Artifactory.server 'artifactory'
+            def uploadSpec = """{
+                "files": [
+                    {
+                        "pattern": "build/bin/statusgo-android-16.aar",
+                        "target": "libs-release-local/status-im/status-go/${version}/status-go-${version}.aar"
+                    },
+                    {
+                        "pattern": "build/bin/statusgo-ios-9.3-framework/status-go-ios.zip",
+                        "target": "libs-release-local/status-im/status-go-ios-simulator/${version}/status-go-ios-simulator-${version}.zip"
+                    }
+                ]
+            }"""
 
-        def buildInfo = Artifactory.newBuildInfo()
-        buildInfo.env.capture = false
-        buildInfo.name = 'status-go (' + gitBranch + '-' + gitShortSHA + ')'
-        server.upload(uploadSpec, buildInfo)
-        server.publishBuildInfo(buildInfo)
+            def buildInfo = Artifactory.newBuildInfo()
+            buildInfo.env.capture = false
+            buildInfo.name = 'status-go (' + gitBranch + '-' + gitShortSHA + ')'
+            server.upload(uploadSpec, buildInfo)
+            server.publishBuildInfo(buildInfo)
+        }
     }
 }
