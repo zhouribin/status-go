@@ -315,7 +315,8 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("mailserver", closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
+		// fixme: status wnode doesnt support "-standalone=true"
+		startNode("mailserver", closeCh, "-httpport=8538", "-forward=true", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
 		startNode("alice", closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
@@ -374,11 +375,6 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	bobNodeInfo, err := bob.getNodeInfo()
-	if err != nil {
-		t.Fatal(err)
-	}
-	bobEnode := bobNodeInfo["enode"].(string)
 	mailServerEnode := mNodeInfo["enode"].(string)
 
 	t.Log("Add mailserver peer to bob node")
@@ -402,11 +398,8 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	n.Server().AddPeer(mailNode)
 	time.Sleep(5 * time.Second)
 
-	t.Log("Mark bob as mailserver trusted")
-	rsp, err := nMail.markTrusted(bobEnode)
-	t.Log(rsp, err)
-
-	rsp, err = bob.markTrusted(mailServerEnode)
+	t.Log("Mark mailserver as bob trusted")
+	rsp, err := bob.markTrusted(mailServerEnode)
 	t.Log(rsp, err)
 
 	t.Log("Get bob node whisper service")
@@ -470,15 +463,20 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	decryptedEnv, err := env.OpenSymmetric(key)
+	// validate decryption
+	var decrypted *whisperv5.ReceivedMessage
+	decrypted, err = env.OpenSymmetric(params.KeySym)
 	if err != nil {
-		t.Fatal(err)
+		t.Fatal("cant decrypt", err)
 	}
-	if !env.IsSymmetric() {
-		t.Fatal("envelop shold be symmetric encrypted")
+	if !decrypted.Validate() {
+		t.Fatal("decrypted message isn't valid")
 	}
-	if !bytes.Equal(decryptedEnv.Payload, data) {
-		t.Fatal("envelop payload isnt decrypted properly", decryptedEnv.Payload, data)
+	if !bytes.Equal(params.Payload, decrypted.Payload) {
+		t.Fatalf("incorrect decryption:\n%v\n%v\n\n", params.Payload, decrypted.Payload)
+	}
+	if !whisperv5.IsPubKeyEqual(decrypted.Src, &params.Src.PublicKey) {
+		t.Fatalf("incorrect decryption. Public keys noy equal:\n%v\n%v\n\n", &params.Src.PublicKey, decrypted.Src)
 	}
 
 	time.Sleep(time.Second)
@@ -487,16 +485,6 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
-	//if len(topic) >= whisper.TopicLength*2 {
-	//	x, err := hex.DecodeString(topic)
-	//	if err != nil {
-	//		return fmt.Errorf("Failed to parse the topic: %s", err)
-	//	}
-	//	xt = whisper.BytesToTopic(x)
-	//}
-	//if timeUpp == 0 {
-	//	timeUpp = 0xFFFFFFFF
 
 	time.Sleep(time.Second)
 	t.Log("Bob get alice message which sent from mailbox")
