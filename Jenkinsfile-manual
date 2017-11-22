@@ -16,9 +16,9 @@ def getVersion(branch, sha, buildNumber) {
 }
 
 node('linux1') {
-	def gopath = pwd()
-	env.GOPATH = gopath
-	println("GOPATH: " + gopath)
+    def gopath = pwd()
+    env.GOPATH = gopath
+    println("GOPATH: " + gopath)
 
     paramBranch = env.branch ? ('*/' + env.branch) : '*/develop'
 
