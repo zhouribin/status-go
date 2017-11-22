@@ -47,10 +47,13 @@ node('linux1') {
     // }
 
     stage('Build') {
-		def gopath = pwd()
-		env.GOPATH = gopath
-		println(gopath)
-		println(env.GOPATH)
+        sh 'env'
+        def gopath = pwd()
+        env.GOPATH = gopath
+        println(gopath)
+        println(env.GOPATH)
+        println("pleeeease")
+        sh 'env'
 
         sh 'go get github.com/karalabe/xgo'
 
