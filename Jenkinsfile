@@ -16,9 +16,6 @@ def getVersion(branch, sha, buildNumber) {
 }
 
 node('linux1') {
-	def gopath = pwd()
-	env.GOPATH = gopath
-	println("GOPATH: " + gopath)
 
     checkout scm
 
@@ -40,6 +37,10 @@ node('linux1') {
     // }
 
     stage('Build') {
+        def gopath = pwd()
+        env.GOPATH = gopath
+        println("GOPATH" + gopath)
+
         sh 'go get github.com/karalabe/xgo'
 
         parallel (
