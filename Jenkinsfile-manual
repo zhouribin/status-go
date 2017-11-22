@@ -16,10 +16,6 @@ def getVersion(branch, sha, buildNumber) {
 }
 
 node('linux1') {
-    def gopath = pwd()
-    env.GOPATH = gopath
-    println("GOPATH: " + gopath)
-
     paramBranch = env.branch ? ('*/' + env.branch) : '*/develop'
 
     checkout(
@@ -42,6 +38,7 @@ node('linux1') {
         sh 'env'
         println(gitBranch)
         println(gitSHA)
+
     }
 
     // TODO(adam): enable when unit tests start passing
@@ -50,6 +47,11 @@ node('linux1') {
     // }
 
     stage('Build') {
+		def gopath = pwd()
+		env.GOPATH = gopath
+		println(gopath)
+		println(env.GOPATH)
+
         sh 'go get github.com/karalabe/xgo'
 
         parallel (
