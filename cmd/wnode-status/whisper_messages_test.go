@@ -17,6 +17,7 @@ import (
 	"time"
 	//"encoding/hex"
 	"encoding/binary"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 //see api at https://github.com/ethereum/go-ethereum/wiki/Whisper-v5-RPC-API
@@ -189,6 +190,7 @@ func TestAliceAndBobP2PMessagingExample_Success(t *testing.T) {
 	alice := Cli{addr: "http://localhost:8536"}
 	bob := Cli{addr: "http://localhost:8537"}
 	mailbox := Cli{addr: "http://localhost:8538"}
+	_ = mailbox
 
 	t.Log("Start nodes")
 	startLocalNode(8536)
@@ -227,25 +229,9 @@ func TestAliceAndBobP2PMessagingExample_Success(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	mailboxSymkeyID, err := mailbox.addSymkey(symkey)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Log("Make alice filter for topic")
-	aliceMsgFilterID, err := alice.makeMessageFilter(alicesymkeyID, topic.String())
-	if err != nil {
-		t.Fatal(err)
-	}
 
 	t.Log("Make bob filter for topic")
 	bobMsgFilterID, err := bob.makeMessageFilter(bobSymkeyID, topic.String())
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Log("Make mailbox filter for topic")
-	mailboxMsgFilterID, err := mailbox.makeMessageFilter(mailboxSymkeyID, topic.String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -291,18 +277,6 @@ func TestAliceAndBobP2PMessagingExample_Success(t *testing.T) {
 		t.Fatal("Hasnt got any messages for bob")
 	}
 	t.Log(err, r)
-
-	t.Log("Mailbox try to find message")
-	r, err = mailbox.getFilterMessages(mailboxMsgFilterID)
-	if len(r.Result.([]interface{})) != 0 {
-		t.Fatal("Has messages at mailbox node")
-	}
-
-	t.Log("Alice try to find message")
-	r, err = alice.getFilterMessages(aliceMsgFilterID)
-	if len(r.Result.([]interface{})) != 0 {
-		t.Fatal("Has messages at alice node")
-	}
 }
 
 func TestGetWhisperMessageMailServer(t *testing.T) {
@@ -325,7 +299,7 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 		doneFn()
 	}()
 
-	t.Log("Alice create symkey")
+	t.Log("Alice create aliceSymKey")
 	time.Sleep(time.Millisecond)
 	aliceSymkeyID, err := alice.createSymkey()
 	if err != nil {
@@ -345,27 +319,39 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	startLocalNode(8536)
 	time.Sleep(4 * time.Second)
 
-	t.Log("Get alice symkey")
-	symkey, err := alice.getSymkey(aliceSymkeyID)
+	t.Log("Get alice symKey")
+	aliceSymKey, err := alice.getSymkey(aliceSymkeyID)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Log("Bob add symkey to his node")
-	symkeyID2, err := bob.addSymkey(symkey)
+	t.Log("Bob add aliceSymKey to his node")
+	bobSymKeyID, err := bob.addSymkey(aliceSymKey)
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	t.Log("Get bob symkey")
+	bobSymKey, err := bob.getSymkey(bobSymKeyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bobSymKeyHex, err := hexutil.Decode(bobSymKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	fmt.Printf("!!!\n%v\n%v\n\n", aliceSymKey, bobSymKey)
 
 	t.Log("Bob makes filter on his node")
-	msgFilterID2, err := bob.makeMessageFilter(symkeyID2, topic.String())
+	bobFilterID, err := bob.makeMessageFilter(bobSymKeyID, topic.String())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	time.Sleep(1 * time.Second)
 	t.Log("Bob check messages. There are no messages")
-	r, err := bob.getFilterMessages(msgFilterID2)
+	r, err := bob.getFilterMessages(bobFilterID)
 	if len(r.Result.([]interface{})) != 0 {
 		t.Fatal("Has got a messages")
 	}
@@ -386,7 +372,7 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 
 	t.Log("Add mailserver peer to bob node too??")
 	//todo(boris) investigate requirement
-	n, err := backend.NodeManager().Node()
+	bobNode, err := backend.NodeManager().Node()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -395,7 +381,7 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	n.Server().AddPeer(mailNode)
+	bobNode.Server().AddPeer(mailNode)
 	time.Sleep(5 * time.Second)
 
 	t.Log("Mark mailserver as bob trusted")
@@ -403,54 +389,42 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	t.Log(rsp, err)
 
 	t.Log("Get bob node whisper service")
-	w, _ := backend.NodeManager().WhisperService()
+	boWhisper, _ := backend.NodeManager().WhisperService()
 
-	timeLow := uint32(time.Now().Add(-2 * time.Minute).Unix())
-	timeUpp := uint32(time.Now().Add(2 * time.Minute).Unix())
+	/*
+		t.Log("Add aliceSymKey from password")
+		bobSymKeyID, err := boWhisper.AddSymKeyFromPassword("asdfasdf")
+		if err != nil {
+			t.Fatalf("Failed to create symmetric key for mail request: %s", err)
+		}
 
-	var key, mailServerPeerID []byte
-
-	t.Log("Time:", timeLow, timeUpp)
-
-	t.Log("Add symkey from password")
-
-	keyID, err := w.AddSymKeyFromPassword("asdfasdf")
-	if err != nil {
-		t.Fatalf("Failed to create symmetric key for mail request: %s", err)
-	}
-
-	t.Log("Add symkey by id")
-	key, err = w.GetSymKey(keyID)
-	if err != nil {
-		t.Fatalf("Failed to save symmetric key for mail request: %s", err)
-	}
+		t.Log("Add aliceSymKey by id")
+		bobSymKey, err := boWhisper.GetSymKey(bobSymKeyID)
+		if err != nil {
+			t.Fatalf("Failed to save symmetric key for mail request: %s", err)
+		}
+	*/
 
 	t.Log("extractIdFromEnode")
-	mailServerPeerID, err = extractIdFromEnode(mailServerEnode)
+	mailServerPeerID, err := extractIdFromEnode(mailServerEnode)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	//t.Log("Add peer to trusted")
-	//err = w.AllowP2PMessagesFromPeer(mailServerPeerID)
-	//if err != nil {
-	//	return err
-	//}
-	//
+	timeLow := uint32(time.Now().Add(-2 * time.Minute).Unix())
+	timeUpp := uint32(time.Now().Add(2 * time.Minute).Unix())
+	t.Log("Time:", timeLow, timeUpp)
 
 	data := make([]byte, 8+whisperv5.TopicLength)
 	binary.BigEndian.PutUint32(data, timeLow)
 	binary.BigEndian.PutUint32(data[4:], timeUpp)
 	copy(data[8:], topic[:])
-	//if xt == empty {
-	//	data = data[:8]
-	//}
 
 	var params whisperv5.MessageParams
 	params.PoW = 1
 	params.Payload = data
-	params.KeySym = key
-	params.Src = getNodeID(w)
+	params.KeySym = bobSymKeyHex
+	params.Src = getNodeID(boWhisper)
 	params.WorkTime = 5
 
 	msg, err := whisperv5.NewSentMessage(&params)
@@ -478,17 +452,16 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	if !whisperv5.IsPubKeyEqual(decrypted.Src, &params.Src.PublicKey) {
 		t.Fatalf("incorrect decryption. Public keys noy equal:\n%v\n%v\n\n", &params.Src.PublicKey, decrypted.Src)
 	}
-
 	time.Sleep(time.Second)
 
-	err = w.RequestHistoricMessages(mailServerPeerID, env)
+	err = boWhisper.RequestHistoricMessages(mailServerPeerID, env)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	time.Sleep(time.Second)
 	t.Log("Bob get alice message which sent from mailbox")
-	r, err = bob.getFilterMessages(msgFilterID2)
+	r, err = bob.getFilterMessages(bobFilterID)
 	t.Log(err, r)
 	//time.Sleep(10*time.Minute)
 	if len(r.Result.([]interface{})) == 0 {
