@@ -342,32 +342,7 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	}
 	t.Log(err, r)
 
-	mNodeInfo, err := nMail.getNodeInfo()
-	if err != nil {
-		t.Fatal(err)
-	}
-	mailServerEnode := mNodeInfo["enode"].(string)
-
-	t.Log("Add mailserver peer to bob node")
-	//todo(boris) investigate requirement
-	err = backend.NodeManager().AddPeer(mailServerEnode)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	t.Log("Add mailserver peer to bob node too??")
-	time.Sleep(5 * time.Second)
-
-	t.Log("Mark mailserver as bob trusted")
-	rsp, err := bob.markTrusted(mailServerEnode)
-	t.Log(rsp, err)
-
-	t.Log("extractIdFromEnode")
-	mailServerPeerID, err := extractIdFromEnode(mailServerEnode)
-	if err != nil {
-		t.Fatal(err)
-	}
-
+	// prepare and send request to mail server for archive messages
 	timeLow := uint32(time.Now().Add(-2 * time.Minute).Unix())
 	timeUpp := uint32(time.Now().Add(2 * time.Minute).Unix())
 	t.Log("Time:", timeLow, timeUpp)
@@ -377,22 +352,12 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	binary.BigEndian.PutUint32(data[4:], timeUpp)
 	copy(data[8:], topic[:])
 
-	t.Log("Get bob's symkey for mailserver")
-	bobWhisper, _ := backend.NodeManager().WhisperService()
-	keyID, err := bobWhisper.AddSymKeyFromPassword("asdfasdf") // mailserver password
-	if err != nil {
-		t.Fatalf("Failed to create symmetric key for mail request: %s", err)
-	}
-	t.Log("Add symkey by id")
-	bobKeyFromPassword, err := bobWhisper.GetSymKey(keyID)
-	if err != nil {
-		t.Fatalf("Failed to save symmetric key for mail request: %s", err)
-	}
-
 	bobNode, err := backend.NodeManager().Node()
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	mailServerPeerID, bobKeyFromPassword := bob.addMailServerNode(t, nMail)
 
 	var params whisperv5.MessageParams
 	params.PoW = 1
@@ -405,31 +370,12 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-
 	env, err := msg.Wrap(&params)
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	fmt.Println("private", params.Src.PublicKey)
-
-	// validate decryption
-	var decrypted *whisperv5.ReceivedMessage
-	decrypted, err = env.OpenSymmetric(params.KeySym)
-	if err != nil {
-		t.Fatal("cant decrypt", err)
-	}
-	if !decrypted.Validate() {
-		t.Fatal("decrypted message isn't valid")
-	}
-	if !bytes.Equal(params.Payload, decrypted.Payload) {
-		t.Fatalf("incorrect decryption:\n%v\n%v\n\n", params.Payload, decrypted.Payload)
-	}
-	if !whisperv5.IsPubKeyEqual(decrypted.Src, &params.Src.PublicKey) {
-		t.Fatalf("incorrect decryption. Public keys noy equal:\n%v\n%v\n\n", &params.Src.PublicKey, decrypted.Src)
-	}
-	time.Sleep(time.Second)
-
+	bobWhisper, _ := backend.NodeManager().WhisperService()
 	err = bobWhisper.RequestHistoricMessages(mailServerPeerID, env)
 	if err != nil {
 		t.Fatal(err)
@@ -683,6 +629,48 @@ func (c Cli) markTrusted(enode string) (RpcResponse, error) {
 		return RpcResponse{}, err
 	}
 	return rsp, nil
+}
+
+func (c Cli) addMailServerNode(t *testing.T, nMail Cli) (mailServerPeerID, bobKeyFromPassword []byte) {
+	mNodeInfo, err := nMail.getNodeInfo()
+	if err != nil {
+		t.Fatal(err)
+	}
+	mailServerEnode := mNodeInfo["enode"].(string)
+
+	t.Log("Add mailserver peer to bob node")
+	//todo(boris) investigate requirement
+	err = backend.NodeManager().AddPeer(mailServerEnode)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Add mailserver peer to bob node too??")
+	time.Sleep(5 * time.Second)
+
+	t.Log("Mark mailserver as bob trusted")
+	rsp, err := c.markTrusted(mailServerEnode)
+	t.Log(rsp, err)
+
+	t.Log("extractIdFromEnode")
+	mailServerPeerID, err = extractIdFromEnode(mailServerEnode)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Get bob's symkey for mailserver")
+	bobWhisper, _ := backend.NodeManager().WhisperService()
+	keyID, err := bobWhisper.AddSymKeyFromPassword("asdfasdf") // mailserver password
+	if err != nil {
+		t.Fatalf("Failed to create symmetric key for mail request: %s", err)
+	}
+	t.Log("Add symkey by id")
+	bobKeyFromPassword, err = bobWhisper.GetSymKey(keyID)
+	if err != nil {
+		t.Fatalf("Failed to save symmetric key for mail request: %s", err)
+	}
+
+	return mailServerPeerID, bobKeyFromPassword
 }
 
 func makeBody(r RpcRequest) (io.Reader, error) {
