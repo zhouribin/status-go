@@ -2,9 +2,9 @@ package main
 
 import (
 	"bytes"
+	"encoding/binary"
 	"encoding/json"
 	"fmt"
-	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"io"
 	"net/http"
@@ -15,9 +15,6 @@ import (
 	"strconv"
 	"testing"
 	"time"
-	//"encoding/hex"
-	"encoding/binary"
-	"github.com/ethereum/go-ethereum/common/hexutil"
 )
 
 //see api at https://github.com/ethereum/go-ethereum/wiki/Whisper-v5-RPC-API
@@ -283,7 +280,7 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	alice := Cli{addr: "http://localhost:8537"}
 	bob := Cli{addr: "http://localhost:8536"}
 	nMail := Cli{addr: "http://localhost:8538"}
-	_ = nMail
+
 	topic := whisperv5.BytesToTopic([]byte("TestGetWhisperMessageMailServer topic name"))
 
 	t.Log("Start nodes")
@@ -331,18 +328,6 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Log("Get bob symkey")
-	bobSymKey, err := bob.getSymkey(bobSymKeyID)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	bobSymKeyHex, err := hexutil.Decode(bobSymKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	fmt.Printf("!!!\n%v\n%v\n\n", aliceSymKey, bobSymKey)
-
 	t.Log("Bob makes filter on his node")
 	bobFilterID, err := bob.makeMessageFilter(bobSymKeyID, topic.String())
 	if err != nil {
@@ -371,39 +356,11 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	}
 
 	t.Log("Add mailserver peer to bob node too??")
-	//todo(boris) investigate requirement
-	bobNode, err := backend.NodeManager().Node()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	mailNode, err := discover.ParseNode(mailServerEnode)
-	if err != nil {
-		t.Fatal(err)
-	}
-	bobNode.Server().AddPeer(mailNode)
 	time.Sleep(5 * time.Second)
 
 	t.Log("Mark mailserver as bob trusted")
 	rsp, err := bob.markTrusted(mailServerEnode)
 	t.Log(rsp, err)
-
-	t.Log("Get bob node whisper service")
-	boWhisper, _ := backend.NodeManager().WhisperService()
-
-	/*
-		t.Log("Add aliceSymKey from password")
-		bobSymKeyID, err := boWhisper.AddSymKeyFromPassword("asdfasdf")
-		if err != nil {
-			t.Fatalf("Failed to create symmetric key for mail request: %s", err)
-		}
-
-		t.Log("Add aliceSymKey by id")
-		bobSymKey, err := boWhisper.GetSymKey(bobSymKeyID)
-		if err != nil {
-			t.Fatalf("Failed to save symmetric key for mail request: %s", err)
-		}
-	*/
 
 	t.Log("extractIdFromEnode")
 	mailServerPeerID, err := extractIdFromEnode(mailServerEnode)
@@ -420,11 +377,28 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	binary.BigEndian.PutUint32(data[4:], timeUpp)
 	copy(data[8:], topic[:])
 
+	t.Log("Get bob's symkey for mailserver")
+	bobWhisper, _ := backend.NodeManager().WhisperService()
+	keyID, err := bobWhisper.AddSymKeyFromPassword("asdfasdf") // mailserver password
+	if err != nil {
+		t.Fatalf("Failed to create symmetric key for mail request: %s", err)
+	}
+	t.Log("Add symkey by id")
+	bobKeyFromPassword, err := bobWhisper.GetSymKey(keyID)
+	if err != nil {
+		t.Fatalf("Failed to save symmetric key for mail request: %s", err)
+	}
+
+	bobNode, err := backend.NodeManager().Node()
+	if err != nil {
+		t.Fatal(err)
+	}
+
 	var params whisperv5.MessageParams
 	params.PoW = 1
 	params.Payload = data
-	params.KeySym = bobSymKeyHex
-	params.Src = getNodeID(boWhisper)
+	params.KeySym = bobKeyFromPassword
+	params.Src = bobNode.Server().PrivateKey
 	params.WorkTime = 5
 
 	msg, err := whisperv5.NewSentMessage(&params)
@@ -436,6 +410,8 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	fmt.Println("private", params.Src.PublicKey)
 
 	// validate decryption
 	var decrypted *whisperv5.ReceivedMessage
@@ -454,7 +430,7 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	}
 	time.Sleep(time.Second)
 
-	err = boWhisper.RequestHistoricMessages(mailServerPeerID, env)
+	err = bobWhisper.RequestHistoricMessages(mailServerPeerID, env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -467,8 +443,8 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	if len(r.Result.([]interface{})) == 0 {
 		t.Fatal("Hasnt got any messages")
 	}
-
 }
+
 func TestAliceSendsMessageAndMessageExistsOnMailserverNode(t *testing.T) {
 	alice := Cli{addr: "http://localhost:8537"}
 	nMail := Cli{addr: "http://localhost:8538"}
@@ -534,6 +510,23 @@ type Cli struct {
 //create sym key
 func (c Cli) createSymkey() (string, error) {
 	r, err := makeBody(MakeRpcRequest("shh_newSymKey", nil))
+	if err != nil {
+		return "", err
+	}
+	resp, err := c.c.Post(c.addr, "application/json", r)
+	if err != nil {
+		return "", err
+	}
+	rsp, err := makeRpcResponse(resp.Body)
+	if err != nil {
+		return "", err
+	}
+	return rsp.Result.(string), nil
+}
+
+//generate sym key
+func (c Cli) generateSymkeyFromPassword(password string) (string, error) {
+	r, err := makeBody(MakeRpcRequest("shh_generateSymKeyFromPassword", []string{password}))
 	if err != nil {
 		return "", err
 	}
