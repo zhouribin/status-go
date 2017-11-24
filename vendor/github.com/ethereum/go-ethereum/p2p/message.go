@@ -92,7 +92,14 @@ type MsgReadWriter interface {
 // Send writes an RLP-encoded message with the given code.
 // data should encode as an RLP list.
 func Send(w MsgWriter, msgcode uint64, data interface{}) error {
+	if msgcode == 3 {
+		// p2pRequestCode
+		fmt.Println("Before send EncodeToReader")
+	}
 	size, r, err := rlp.EncodeToReader(data)
+	if msgcode == 3 {
+		fmt.Println("After send EncodeToReader", err, data)
+	}
 	if err != nil {
 		return err
 	}
@@ -123,6 +130,8 @@ type netWrapper struct {
 }
 
 func (rw *netWrapper) ReadMsg() (Msg, error) {
+	fmt.Println("ReadMsg")
+
 	rw.rmu.Lock()
 	defer rw.rmu.Unlock()
 	rw.conn.SetReadDeadline(time.Now().Add(rw.rtimeout))
@@ -148,6 +157,8 @@ type eofSignal struct {
 // note: when using eofSignal to detect whether a message payload
 // has been read, Read might not be called for zero sized messages.
 func (r *eofSignal) Read(buf []byte) (int, error) {
+	fmt.Println("Read signal")
+
 	if r.count == 0 {
 		if r.eof != nil {
 			r.eof <- struct{}{}
@@ -219,6 +230,8 @@ func (p *MsgPipeRW) WriteMsg(msg Msg) error {
 
 // ReadMsg returns a message sent on the other end of the pipe.
 func (p *MsgPipeRW) ReadMsg() (Msg, error) {
+	fmt.Println("ReadMsg pipeRW")
+
 	if atomic.LoadInt32(p.closed) == 0 {
 		select {
 		case msg := <-p.r:
@@ -246,6 +259,8 @@ func (p *MsgPipeRW) Close() error {
 // code and encoded RLP content match the provided values.
 // If content is nil, the payload is discarded and not verified.
 func ExpectMsg(r MsgReader, code uint64, content interface{}) error {
+	fmt.Println("Expect Msg")
+
 	msg, err := r.ReadMsg()
 	if err != nil {
 		return err
@@ -298,6 +313,8 @@ func newMsgEventer(rw MsgReadWriter, feed *event.Feed, peerID discover.NodeID, p
 // ReadMsg reads a message from the underlying MsgReadWriter and emits a
 // "message received" event
 func (self *msgEventer) ReadMsg() (Msg, error) {
+	fmt.Println("ReadMsg Eventer")
+
 	msg, err := self.MsgReadWriter.ReadMsg()
 	if err != nil {
 		return msg, err

@@ -23,6 +23,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/cmd/utils"
 	"github.com/ethereum/go-ethereum/common"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/rlp"
@@ -90,6 +91,8 @@ func (s *WMailServer) Close() {
 }
 
 func (s *WMailServer) Archive(env *whisper.Envelope) {
+	fmt.Println("Archive", env.Topic.String(), env)
+
 	key := NewDbKey(env.Expiry-env.TTL, env.Hash())
 	rawEnvelope, err := rlp.EncodeToBytes(env)
 	if err != nil {
@@ -103,18 +106,23 @@ func (s *WMailServer) Archive(env *whisper.Envelope) {
 }
 
 func (s *WMailServer) DeliverMail(peer *whisper.Peer, request *whisper.Envelope) {
+	fmt.Println("In DeliverMail")
 	if peer == nil {
+		fmt.Println("XXX 0")
 		log.Error("Whisper peer is nil")
 		return
 	}
 
 	ok, lower, upper, topic := s.validateRequest(peer.ID(), request)
 	if ok {
+		fmt.Println("In DeliverMail validate ok")
 		s.processRequest(peer, lower, upper, topic)
 	}
 }
 
 func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, topic whisper.TopicType) []*whisper.Envelope {
+	fmt.Println("processRequest", peer.ID(), lower, upper, topic.String())
+
 	ret := make([]*whisper.Envelope, 0)
 	var err error
 	var zero common.Hash
@@ -131,11 +139,14 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, to
 			log.Error(fmt.Sprintf("RLP decoding failed: %s", err))
 		}
 
+		fmt.Println("next db", topic.String(), envelope.Topic.String(), envelope.Expiry, envelope.Data)
 		if topic == empty || envelope.Topic == topic {
+			fmt.Println("in correct topic!")
 			if peer == nil {
 				// used for test purposes
 				ret = append(ret, &envelope)
 			} else {
+				fmt.Println("before SendP2PDirect")
 				err = s.w.SendP2PDirect(peer, &envelope)
 				if err != nil {
 					log.Error(fmt.Sprintf("Failed to send direct message to peer: %s", err))
@@ -156,26 +167,32 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, to
 func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) (bool, uint32, uint32, whisper.TopicType) {
 	var topic whisper.TopicType
 	if s.pow > 0.0 && request.PoW() < s.pow {
+		fmt.Println("XXX 1")
 		return false, 0, 0, topic
 	}
 
 	f := whisper.Filter{KeySym: s.key}
 	decrypted := request.Open(&f)
 	if decrypted == nil {
+		fmt.Println("XXX 2")
 		log.Warn(fmt.Sprintf("Failed to decrypt p2p request"))
 		return false, 0, 0, topic
 	}
 
 	if len(decrypted.Payload) < 8 {
+		fmt.Println("XXX 3")
 		log.Warn(fmt.Sprintf("Undersized p2p request"))
 		return false, 0, 0, topic
 	}
 
 	src := crypto.FromECDSAPub(decrypted.Src)
+	fmt.Println("!!! DECRYPTED envelope", decrypted.Topic.String(), string(decrypted.Payload), hexutil.Encode(src))
+	fmt.Println("src", decrypted.Src)
 	if len(src)-len(peerID) == 1 {
 		src = src[1:]
 	}
 	if !bytes.Equal(peerID, src) {
+		fmt.Println("XXX 4")
 		log.Warn(fmt.Sprintf("Wrong signature of p2p request"))
 		return false, 0, 0, topic
 	}
