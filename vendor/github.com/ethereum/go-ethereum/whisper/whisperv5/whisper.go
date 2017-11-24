@@ -610,8 +610,6 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				log.Warn("failed to decode envelope, peer will be disconnected", "peer", p.peer.ID(), "err", err)
 				return errors.New("invalid envelope")
 			}
-
-			fmt.Println("messageCode", envelope.Topic.String(), envelope.TTL)
 			cached, err := wh.add(&envelope)
 			if err != nil {
 				log.Warn("bad envelope received, peer will be disconnected", "peer", p.peer.ID(), "err", err)
@@ -645,7 +643,6 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 					wh.traceIncomingDelivery(true, message.RejectedStatus, nil, &request, nil, err)
 					return errors.New("invalid p2p request")
 				}
-				fmt.Println("In POST Whisper:", request.Topic.String(), request.TTL)
 				wh.mailServer.DeliverMail(p, &request)
 			}
 		default:

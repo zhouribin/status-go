@@ -6,11 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	_ "github.com/ethereum/go-ethereum/common"
-	_ "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"io"
-	"io/ioutil"
 	"net/http"
 	"os"
 	"os/exec"
@@ -398,7 +395,7 @@ func TestGetWhisperMessageMailServer_Symmetric(t *testing.T) {
 	}
 }
 
-func TestGetWhisakeperMessageMailServer_Asymmetric(t *testing.T) {
+func TestGetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 	alice := Cli{addr: "http://localhost:8537"}
 	bob := Cli{addr: "http://localhost:8536"}
 	nMail := Cli{addr: "http://localhost:8538"}
@@ -430,8 +427,8 @@ func TestGetWhisakeperMessageMailServer_Asymmetric(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Log("Alice send message to bob", topic)
-	_, err = alice.postAsymMessage(alicePublicKey, aliceKeyID, topic.String(), 4, "") //topic.String()
+	t.Log("Alice send message to bob")
+	_, err = alice.postAsymMessage(alicePublicKey, topic.String(), 4, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -449,15 +446,8 @@ func TestGetWhisakeperMessageMailServer_Asymmetric(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Log("Mail adds aliceKey to his node")
-	mailKeyID, err := nMail.addPrivateKey(alicePrivateKey)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_ = mailKeyID
-
 	t.Log("Bob makes filter on his node")
-	bobFilterID, err := bob.makeAsyncMessageFilter(bobKeyID, topic.String()) //topic.String()
+	bobFilterID, err := bob.makeAsyncMessageFilter(bobKeyID, topic.String())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -468,7 +458,16 @@ func TestGetWhisakeperMessageMailServer_Asymmetric(t *testing.T) {
 	if len(r.Result.([]interface{})) != 0 {
 		t.Fatal("Has got a messages")
 	}
-	t.Log(err, r)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bobNode, err := backend.NodeManager().Node()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mailServerPeerID, bobKeyFromPassword := bob.addMailServerNode(t, nMail)
 
 	// prepare and send request to mail server for archive messages
 	timeLow := uint32(time.Now().Add(-2 * time.Minute).Unix())
@@ -480,33 +479,12 @@ func TestGetWhisakeperMessageMailServer_Asymmetric(t *testing.T) {
 	binary.BigEndian.PutUint32(data[4:], timeUpp)
 	copy(data[8:], topic[:])
 
-	bobNode, err := backend.NodeManager().Node()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	mailServerPeerID, bobKeyFromPassword := bob.addMailServerNode(t, nMail)
-
-	t.Log("Get alice key pair")
-	mailPrivateKey, mailPublicKey, err := nMail.getKeyPair(aliceKeyID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	bobPrivateKey, bobPublicKey, err := bob.getKeyPair(aliceKeyID)
-	if err != nil {
-		t.Fatal(err)
-	}
-	_, _, _, _, _, _ = bobPublicKey, alicePublicKey, mailPrivateKey, mailPublicKey, bobPrivateKey, bobKeyFromPassword
-
 	var params whisperv5.MessageParams
 	params.PoW = 1
 	params.Payload = data
 	params.KeySym = bobKeyFromPassword
 	params.Src = bobNode.Server().PrivateKey
-	//params.Dst = crypto.ToECDSAPub(common.FromHex(mailPublicKey))
 	params.WorkTime = 5
-
-	fmt.Println("bob!", bobNode.Server().PrivateKey.Public())
 
 	msg, err := whisperv5.NewSentMessage(&params)
 	if err != nil {
@@ -518,7 +496,7 @@ func TestGetWhisakeperMessageMailServer_Asymmetric(t *testing.T) {
 	}
 
 	bobWhisper, _ := backend.NodeManager().WhisperService()
-	err = bobWhisper.RequestHistoricMessages(mailServerPeerID, env) // correct!
+	err = bobWhisper.RequestHistoricMessages(mailServerPeerID, env)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -769,28 +747,19 @@ func (c Cli) postMessage(symKeyID string, topic string, ttl int, targetPeer stri
 }
 
 //post wisper message with asymmetric encryption
-func (c Cli) postAsymMessage(pubKey, senderKeyID, topic string, ttl int, targetPeer string) (RpcResponse, error) {
-	fmt.Println("postAsync", pubKey)
-
+func (c Cli) postAsymMessage(pubKey, topic string, ttl int, targetPeer string) (RpcResponse, error) {
 	r, err := makeBody(MakeRpcRequest("shh_post", []shhPost{{
-		PubKey:     pubKey, //postData.pubKey = this.recipientPubKey;
+		PubKey:     pubKey,
 		Topic:      topic,
 		Payload:    "0x73656e74206265666f72652066696c7465722077617320616374697665202873796d6d657472696329",
 		PowTarget:  0.001,
 		PowTime:    1,
 		TTL:        119,
 		TargetPeer: targetPeer,
-		//Sig:        senderKeyID,
-		//postData.sig = this.asymKeyId;
 	}}))
 	if err != nil {
 		return RpcResponse{}, err
 	}
-
-	//fmt.Println("asym post")
-	//b, _ := ioutil.ReadAll(r)
-	//r = bytes.NewBuffer(b)
-	//fmt.Println(string(b))
 
 	resp, err := c.c.Post(c.addr, "application/json", r)
 	if err != nil {
@@ -828,17 +797,10 @@ func (c Cli) makeAsyncMessageFilter(privateKeyID string, topic string) (string, 
 		PrivateKeyID: privateKeyID,
 		Topics:       []string{topic},
 		AllowP2P:     true,
-
-		//filter.privateKeyID = this.asymKeyId;
 	}}))
 	if err != nil {
 		return "", err
 	}
-
-	fmt.Println("asym filter")
-	b, _ := ioutil.ReadAll(r)
-	r = bytes.NewBuffer(b)
-	fmt.Println(string(b))
 
 	resp, err := c.c.Post(c.addr, "application/json", r)
 	if err != nil {

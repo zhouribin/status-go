@@ -27,7 +27,6 @@ import (
 	"errors"
 	"strconv"
 
-	"fmt"
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/ecies"
@@ -278,10 +277,7 @@ func (msg *ReceivedMessage) decryptSymmetric(key []byte, nonce []byte) error {
 
 // decryptAsymmetric decrypts an encrypted payload with a private key.
 func (msg *ReceivedMessage) decryptAsymmetric(key *ecdsa.PrivateKey) error {
-	fmt.Println("ReceivedMessage.decryptAsymmetric", key.PublicKey)
-
-	decrypted, err := ecies.ImportECDSA(key).
-		Decrypt(crand.Reader, msg.Raw, nil, nil)
+	decrypted, err := ecies.ImportECDSA(key).Decrypt(crand.Reader, msg.Raw, nil, nil)
 	if err == nil {
 		msg.Raw = decrypted
 	}
