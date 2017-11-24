@@ -112,6 +112,8 @@ func MakeRpcRequest(method string, params interface{}) RpcRequest {
 	}
 }
 
+var mailServerParams = []string{"-bootstrap=true", "-forward=true", "-mailserver=true", "-httpport=8538", "-http=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"}
+
 func TestAliceSendMessageToBobWithSymkeyAndTopicAndBobReceiveThisMessage_Success(t *testing.T) {
 	alice := Cli{addr: "http://localhost:8536"}
 	bob := Cli{addr: "http://localhost:8537"}
@@ -198,7 +200,7 @@ func TestAliceAndBobP2PMessagingExample_Success(t *testing.T) {
 
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("mailserver", closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
+		startNode("mailserver", closeCh, mailServerParams...),
 		startNode("bob", closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
@@ -280,7 +282,7 @@ func TestAliceAndBobP2PMessagingExample_Success(t *testing.T) {
 	t.Log(err, r)
 }
 
-func TestGetWhisperMessageMailServer(t *testing.T) {
+func TestGetWhisperMessageMailServer_Symmetric(t *testing.T) {
 	alice := Cli{addr: "http://localhost:8537"}
 	bob := Cli{addr: "http://localhost:8536"}
 	nMail := Cli{addr: "http://localhost:8538"}
@@ -290,7 +292,7 @@ func TestGetWhisperMessageMailServer(t *testing.T) {
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("mailserver", closeCh, "-httpport=8538", "-forward=true", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
+		startNode("mailserver", closeCh, mailServerParams...),
 		startNode("alice", closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
@@ -403,7 +405,7 @@ func TestGetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("mailserver", closeCh, "-httpport=8538", "-forward=true", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
+		startNode("mailserver", closeCh, mailServerParams...),
 		startNode("alice", closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
@@ -535,7 +537,7 @@ func TestAliceSendsMessageAndMessageExistsOnMailserverNode(t *testing.T) {
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("mailserver", closeCh, "-httpport=8538", "-http=true", "-mailserver=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"),
+		startNode("mailserver", closeCh, mailServerParams...),
 		startNode("alice", closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
