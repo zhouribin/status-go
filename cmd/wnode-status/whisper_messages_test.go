@@ -398,7 +398,7 @@ func TestGetWhisperMessageMailServer_Symmetric(t *testing.T) {
 	}
 }
 
-func TestGetWhisperMessageMailServer_Asymmetric(t *testing.T) {
+func TestGetWhisakeperMessageMailServer_Asymmetric(t *testing.T) {
 	alice := Cli{addr: "http://localhost:8537"}
 	bob := Cli{addr: "http://localhost:8536"}
 	nMail := Cli{addr: "http://localhost:8538"}
@@ -431,7 +431,7 @@ func TestGetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 	}
 
 	t.Log("Alice send message to bob", topic)
-	_, err = alice.postAsymMessage(alicePrivateKey, aliceKeyID, topic.String(), 4, "") //topic.String()
+	_, err = alice.postAsymMessage(alicePublicKey, aliceKeyID, topic.String(), 4, "") //topic.String()
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -497,13 +497,6 @@ func TestGetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 		t.Fatal(err)
 	}
 	_, _, _, _, _, _ = bobPublicKey, alicePublicKey, mailPrivateKey, mailPublicKey, bobPrivateKey, bobKeyFromPassword
-
-	_, err = alice.postAsymMessage(bobPrivateKey, aliceKeyID, topic.String(), 4, "") //topic.String()
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	fmt.Printf("PKs:\n%v\n%v\n\n", alicePrivateKey, bobPrivateKey)
 
 	var params whisperv5.MessageParams
 	params.PoW = 1
