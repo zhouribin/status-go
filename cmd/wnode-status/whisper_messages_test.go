@@ -123,7 +123,7 @@ func TestAliceSendMessageToBobWithSymkeyAndTopicAndBobReceiveThisMessage_Success
 
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("bob", WNODE_BIN, closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("bob", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
 
@@ -201,7 +201,7 @@ func TestAliceAndBobP2PMessagingExample_Success(t *testing.T) {
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
 		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams...),
-		startNode("bob", WNODE_BIN, closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("bob", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
 
@@ -293,7 +293,7 @@ func TestGetWhisperMessageMailServer_Symmetric(t *testing.T) {
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
 		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams...),
-		startNode("alice", WNODE_BIN, closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
 	defer func() {
@@ -406,7 +406,7 @@ func TestGetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
 		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams...),
-		startNode("alice", WNODE_BIN, closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
 	defer func() {
@@ -521,7 +521,7 @@ func Test_StatusdClient_GetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
 		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams...),
-		startNode("alice", STATUSD_BIN, closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
 	defer func() {
@@ -636,7 +636,7 @@ func TestGetWhisperMessageMailServer_AllTopicMessages(t *testing.T) {
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
 		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams...),
-		startNode("alice", WNODE_BIN, closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
 	defer func() {
@@ -754,8 +754,8 @@ func TestAliceSendsMessageAndMessageExistsOnMailserverNode(t *testing.T) {
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("mailserver", closeCh, mailServerParams...),
-		startNode("alice", closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams...),
+		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
 	defer func() {
