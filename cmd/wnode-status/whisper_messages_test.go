@@ -395,6 +395,66 @@ func TestGetWhisperMessageMailServer_Symmetric(t *testing.T) {
 	}
 }
 
+func TestGetWhisperMessage_Asymmetric(t *testing.T) {
+	alice := Cli{addr: "http://localhost:8537"}
+	bob := Cli{addr: "http://localhost:8536"}
+
+	topic := whisperv5.BytesToTopic([]byte("TestGetWhisperMessage_Asymmetric topic name"))
+
+	t.Log("Start nodes")
+	closeCh := make(chan struct{})
+	doneFn := composeNodesClose(
+		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
+	)
+	t.Log("Start bob node")
+	startLocalNode(8536)
+
+	time.Sleep(4 * time.Second)
+	defer func() {
+		close(closeCh)
+		doneFn()
+	}()
+
+	t.Log("Alice create createAsymkey")
+	time.Sleep(time.Millisecond)
+	aliceAsymkeyID, err := alice.createAsymkey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	_ = aliceAsymkeyID
+
+	t.Log("Bob create createAsymkey")
+	bobAsymkeyID, err := bob.createAsymkey()
+	if err != nil {
+		t.Fatal(err)
+	}
+	bobPubKey, err := bob.getPublicKey(bobAsymkeyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Bob sends to alice bob pubkey")
+
+	t.Log("Alice send message to bob using bob pubkey")
+	_, err = alice.postAsymMessage(bobPubKey, topic.String(), 4, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Bob makes filter on his node")
+	bobFilterID, err := bob.makeAsyncMessageFilter(bobAsymkeyID, topic.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(1 * time.Second)
+	t.Log("Bob check messages. There are messages")
+	r, err := bob.getFilterMessages(bobFilterID)
+	if len(r.Result.([]interface{})) == 0 {
+		t.Fatal("Has got a messages")
+	}
+}
+
 func TestGetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 	alice := Cli{addr: "http://localhost:8537"}
 	bob := Cli{addr: "http://localhost:8536"}
