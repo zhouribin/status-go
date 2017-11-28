@@ -79,11 +79,6 @@ type shhNewMessageFilter struct {
 }
 
 */
-type adminNodeInfo struct {
-	Id    string `json:"id"`
-	Name  string `json:"name"`
-	Enode string `json:"enode"`
-}
 
 type RpcRequest struct {
 	Version string      `json:"jsonrpc"`
@@ -507,6 +502,125 @@ func TestGetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 	t.Log(err, r)
 	if len(r.Result.([]interface{})) == 0 {
 		t.Fatal("Hasnt got any messages")
+	}
+}
+
+func TestGetWhisperMessageMailServer_AllTopicMessages(t *testing.T) {
+	alice := Cli{addr: "http://localhost:8537"}
+	bob := Cli{addr: "http://localhost:8536"}
+	nMail := Cli{addr: "http://localhost:8538"}
+
+	topic := whisperv5.BytesToTopic([]byte("TestGetWhisperMessageMailServer topic name"))
+
+	t.Log("Start nodes")
+	closeCh := make(chan struct{})
+	doneFn := composeNodesClose(
+		startNode("mailserver", closeCh, mailServerParams...),
+		startNode("alice", closeCh, "-httpport=8537", "-http=true", "-datadir=w1"),
+	)
+	time.Sleep(4 * time.Second)
+	defer func() {
+		close(closeCh)
+		doneFn()
+	}()
+
+	t.Log("Alice create aliceSymKey")
+	time.Sleep(time.Millisecond)
+	aliceSymkeyID, err := alice.createSymkey()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Alice send message to bob")
+	_, err = alice.postMessage(aliceSymkeyID, topic.String(), 4, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Wait that Alice message is being expired")
+	time.Sleep(10 * time.Second)
+
+	t.Log("Start bob node")
+	startLocalNode(8536)
+	time.Sleep(4 * time.Second)
+
+	t.Log("Get alice symKey")
+	aliceSymKey, err := alice.getSymkey(aliceSymkeyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Bob add aliceSymKey to his node")
+	bobSymKeyID, err := bob.addSymkey(aliceSymKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Bob sends message to alice")
+	_, err = bob.postMessage(bobSymKeyID, topic.String(), 4, "")
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	t.Log("Bob makes filter on his node")
+	bobFilterID, err := bob.makeMessageFilter(bobSymKeyID, topic.String())
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(1 * time.Second)
+	t.Log("Bob check messages. There are no messages")
+	r, err := bob.getFilterMessages(bobFilterID)
+	if len(r.Result.([]interface{})) != 0 {
+		t.Fatal("Has got a messages")
+	}
+	t.Log(err, r)
+
+	// prepare and send request to mail server for archive messages
+	timeLow := uint32(time.Now().Add(-2 * time.Minute).Unix())
+	timeUpp := uint32(time.Now().Add(2 * time.Minute).Unix())
+	t.Log("Time:", timeLow, timeUpp)
+
+	data := make([]byte, 8+whisperv5.TopicLength)
+	binary.BigEndian.PutUint32(data, timeLow)
+	binary.BigEndian.PutUint32(data[4:], timeUpp)
+	copy(data[8:], topic[:])
+
+	bobNode, err := backend.NodeManager().Node()
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	mailServerPeerID, bobKeyFromPassword := bob.addMailServerNode(t, nMail)
+
+	var params whisperv5.MessageParams
+	params.PoW = 1
+	params.Payload = data
+	params.KeySym = bobKeyFromPassword
+	params.Src = bobNode.Server().PrivateKey
+	params.WorkTime = 5
+
+	msg, err := whisperv5.NewSentMessage(&params)
+	if err != nil {
+		t.Fatal(err)
+	}
+	env, err := msg.Wrap(&params)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	bobWhisper, _ := backend.NodeManager().WhisperService()
+	err = bobWhisper.RequestHistoricMessages(mailServerPeerID, env)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	time.Sleep(time.Second)
+	t.Log("Bob get alice message which sent from mailbox")
+	r, err = bob.getFilterMessages(bobFilterID)
+	t.Log(err, r)
+	if len(r.Result.([]interface{})) != 2 {
+		t.Fatal("Hasnt got messages from Alice and Bob both")
 	}
 }
 
