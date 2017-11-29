@@ -120,6 +120,7 @@ func TestAliceSendMessageToBobWithSymkeyAndTopicAndBobReceiveThisMessage_Success
 
 	t.Log("Start nodes")
 	startLocalNode(8536)
+	defer stopLocalNode()
 
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
@@ -197,6 +198,7 @@ func TestAliceAndBobP2PMessagingExample_Success(t *testing.T) {
 
 	t.Log("Start nodes")
 	startLocalNode(8536)
+	defer stopLocalNode()
 
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
@@ -319,6 +321,7 @@ func TestGetWhisperMessageMailServer_Symmetric(t *testing.T) {
 
 	t.Log("Start bob node")
 	startLocalNode(8536)
+	defer stopLocalNode()
 	time.Sleep(4 * time.Second)
 
 	t.Log("Get alice symKey")
@@ -468,7 +471,11 @@ func TestGetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams...),
 		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
+
+	t.Log("Start bob node")
+	startLocalNode(8536)
 	time.Sleep(4 * time.Second)
+
 	defer func() {
 		close(closeCh)
 		doneFn()
@@ -476,32 +483,50 @@ func TestGetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 
 	t.Log("Alice create aliceKey")
 	time.Sleep(time.Millisecond)
-	aliceKeyID, err := alice.createAsymkey()
+	_, err := alice.createAsymkey()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Log("Get alice key pair")
-	alicePrivateKey, alicePublicKey, err := alice.getKeyPair(aliceKeyID)
+	t.Log("Bob creates key pair to his node")
+	bobKeyID, err := bob.createAsymkey()
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	bobPrivateKey, bobPublicKey, err := bob.getKeyPair(bobKeyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// At this time nodes do public keys exchange
+
+	// Bob goes offline
+	err = stopLocalNode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("Bob has been stopped", backend)
 
 	t.Log("Alice send message to bob")
-	_, err = alice.postAsymMessage(alicePublicKey, topic.String(), 4, "")
+	_, err = alice.postAsymMessage(bobPublicKey, topic.String(), 4, "")
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Log("Wait that Alice message is being expired")
-	time.Sleep(10 * time.Second)
+	time.Sleep(3 * time.Second)
 
-	t.Log("Start bob node")
-	startLocalNode(8536)
+	t.Log("Resume bob node")
+	startLocalNode(8539)
+	bob = Cli{addr: "http://localhost:8539"}
 	time.Sleep(4 * time.Second)
+	defer stopLocalNode()
 
-	t.Log("Bob adds aliceKey to his node")
-	bobKeyID, err := bob.addPrivateKey(alicePrivateKey)
+	t.Log("Is Bob`s node running", backend.NodeManager().IsNodeRunning())
+
+	t.Log("Bob restores private key")
+	_, err = bob.addPrivateKey(bobPrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -583,6 +608,8 @@ func Test_StatusdClient_GetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams...),
 		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
 	)
+	t.Log("Start bob node")
+	startLocalNode(8536)
 	time.Sleep(4 * time.Second)
 	defer func() {
 		close(closeCh)
@@ -591,19 +618,33 @@ func Test_StatusdClient_GetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 
 	t.Log("Alice create aliceKey")
 	time.Sleep(time.Millisecond)
-	aliceKeyID, err := alice.createAsymkey()
+	_, err := alice.createAsymkey()
 	if err != nil {
 		t.Fatal(err)
 	}
 
-	t.Log("Get alice key pair")
-	alicePrivateKey, alicePublicKey, err := alice.getKeyPair(aliceKeyID)
+	t.Log("Bob creates key pair to his node")
+	bobKeyID, err := bob.createAsymkey()
 	if err != nil {
 		t.Fatal(err)
 	}
+
+	bobPrivateKey, bobPublicKey, err := bob.getKeyPair(bobKeyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// At this time nodes do public keys exchange
+
+	// Bob goes offline
+	err = stopLocalNode()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Log("Bob has been stopped", backend)
 
 	t.Log("Alice send message to bob")
-	_, err = alice.postAsymMessage(alicePublicKey, topic.String(), 4, "")
+	_, err = alice.postAsymMessage(bobPublicKey, topic.String(), 4, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -611,12 +652,14 @@ func Test_StatusdClient_GetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 	t.Log("Wait that Alice message is being expired")
 	time.Sleep(10 * time.Second)
 
-	t.Log("Start bob node")
-	startLocalNode(8536)
+	t.Log("Resume bob node")
+	startLocalNode(8539)
+	bob = Cli{addr: "http://localhost:8539"}
 	time.Sleep(4 * time.Second)
+	defer stopLocalNode()
 
-	t.Log("Bob adds aliceKey to his node")
-	bobKeyID, err := bob.addPrivateKey(alicePrivateKey)
+	t.Log("Bob restores private key")
+	_, err = bob.addPrivateKey(bobPrivateKey)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -722,6 +765,7 @@ func TestGetWhisperMessageMailServer_AllTopicMessages(t *testing.T) {
 
 	t.Log("Start bob node")
 	startLocalNode(8536)
+	defer stopLocalNode()
 	time.Sleep(4 * time.Second)
 
 	t.Log("Get alice symKey")
@@ -1093,16 +1137,26 @@ func (c Cli) makeAsyncMessageFilter(privateKeyID string, topic string) (string, 
 		AllowP2P:     true,
 	}}))
 	if err != nil {
+		fmt.Println("11111", err)
 		return "", err
 	}
 
 	resp, err := c.c.Post(c.addr, "application/json", r)
 	if err != nil {
+		fmt.Println("222222", err)
 		return "", err
 	}
+
 	rsp, err := makeRpcResponse(resp.Body)
 	if err != nil {
+		cnf, _ := backend.NodeManager().NodeConfig()
+		fmt.Println("333333", err, cnf.HTTPPort, cnf.Name, c.addr)
 		return "", err
+	}
+
+	if rsp.Error.Message != "" {
+		fmt.Println("444444", err)
+		return "", errors.New(rsp.Error.Message)
 	}
 
 	return rsp.Result.(string), nil
@@ -1297,4 +1351,19 @@ func startNode(name string, binary string, closeCh chan struct{}, args ...string
 func getRootDir() string {
 	_, f, _, _ := runtime.Caller(0)
 	return path.Dir(f)
+}
+
+func stopLocalNode() error {
+	if backend == nil {
+		return nil
+	}
+
+	backCh, err := backend.StopNode()
+	if err != nil {
+		return err
+	}
+	<-backCh
+	backend = nil
+
+	return nil
 }

@@ -164,8 +164,6 @@ func (m *NodeManager) StopNode() (<-chan struct{}, error) {
 
 // stopNode stop Status node. Stopped node cannot be resumed.
 func (m *NodeManager) stopNode() (<-chan struct{}, error) {
-	fmt.Println("STTTTOOOOOOOOOOOOOOOOOOOOOOOOOOPP")
-
 	// now attempt to stop
 	if err := m.node.Stop(); err != nil {
 		return nil, err

@@ -55,8 +55,8 @@ func main() {
 		}
 	}
 
-	backend = api.NewStatusBackend()
-	started, err := backend.StartNode(config)
+	b := api.NewStatusBackend()
+	started, err := b.StartNode(config)
 	if err != nil {
 		log.Fatalf("Node start failed: %v", err)
 		return
@@ -65,24 +65,29 @@ func main() {
 	// wait till node is started
 	<-started
 	if *mailserver == true {
-		n1, _ := backend.NodeManager().Node()
+		n1, _ := b.NodeManager().Node()
 		fmt.Printf("------------------------n1.Server().NodeInfo().Enode: '%s'", n1.Server().NodeInfo().Enode)
 	}
 
 	if *injectAccounts {
-		if err := InjectTestAccounts(backend.NodeManager()); err != nil {
+		if err := InjectTestAccounts(b.NodeManager()); err != nil {
 			log.Fatalf("Failed to inject accounts: %v", err)
 		}
 	}
 
 	// wait till node has been stopped
-	node, err := backend.NodeManager().Node()
+	node, err := b.NodeManager().Node()
 	if err != nil {
 		log.Fatalf("Getting node failed: %v", err)
 		return
 	}
 
+	backend = b
+	log.Println("Wnode started!", config)
+
 	node.Wait()
+
+	log.Println("Wnode stopped!")
 }
 
 // printHeader prints command header

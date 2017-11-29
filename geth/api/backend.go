@@ -241,7 +241,6 @@ func (m *StatusBackend) DiscardTransactions(ids []common.QueuedTxID) map[common.
 func (m *StatusBackend) registerHandlers() error {
 	rpcClient := m.NodeManager().RPCClient()
 	if rpcClient == nil {
-		fmt.Println("1111111111111111111")
 		return node.ErrRPCClient
 	}
 
