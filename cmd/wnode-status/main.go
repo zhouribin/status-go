@@ -26,7 +26,7 @@ var (
 	mailserver     = flag.Bool("mailserver", false, "Delivers expired messages on demand")
 	identity       = flag.String("identity", "", "Protocol identity file (private key used for asymmetric encryption)")
 	password       = flag.String("password", "", "Password file (password is used for symmetric encryption)")
-	port           = flag.Int("port", params.WhisperPort, "Whisper node's listening port")
+	wsport         = flag.Int("port", params.WhisperPort, "Whisper node's listening port")
 	pow            = flag.Float64("pow", params.WhisperMinimumPoW, "PoW for messages to be added to queue, in float format")
 	ttl            = flag.Int("ttl", params.WhisperTTL, "Time to live for messages, in seconds")
 	injectAccounts = flag.Bool("injectaccounts", true, "Whether test account should be injected or not")

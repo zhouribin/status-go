@@ -42,7 +42,7 @@ func makeNodeConfig() (*params.NodeConfig, error) {
 	whisperConfig.ForwarderNode = *forward
 	whisperConfig.NotificationServerNode = *notify
 	whisperConfig.MailServerNode = *mailserver
-	whisperConfig.Port = *port
+	whisperConfig.Port = *wsport
 	whisperConfig.TTL = *ttl
 	whisperConfig.MinimumPoW = *pow
 

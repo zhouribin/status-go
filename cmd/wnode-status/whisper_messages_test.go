@@ -6,14 +6,17 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"os/exec"
 	"path"
 	"runtime"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -103,6 +106,28 @@ type rpcError struct {
 	Message string `json:"message"`
 }
 
+type port int
+
+func (p port) String() string {
+	return strconv.Itoa(int(p))
+}
+
+func (p port) Int() int {
+	return int(p)
+}
+
+func getFreePort() port {
+	l, _ := net.Listen("tcp", ":0")
+	defer l.Close()
+
+	addr := l.Addr().String()
+	portStartIndex := strings.LastIndex(addr, ":")
+
+	pNum, _ := strconv.Atoi(addr[portStartIndex+1:])
+
+	return port(pNum)
+}
+
 func MakeRpcRequest(method string, params interface{}) RpcRequest {
 	return RpcRequest{
 		Version: "2.0",
@@ -112,19 +137,21 @@ func MakeRpcRequest(method string, params interface{}) RpcRequest {
 	}
 }
 
-var mailServerParams = []string{"-bootstrap=true", "-forward=true", "-mailserver=true", "-httpport=8538", "-http=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"}
+func mailServerParams(portNumber string) []string {
+	return []string{"-bootstrap=true", "-forward=true", "-mailserver=true", "-httpport=" + portNumber, "-http=true", "-identity=../../static/keys/wnodekey", "-password=../../static/keys/wnodepassword", "-datadir=w2"}
+}
 
 func TestAliceSendMessageToBobWithSymkeyAndTopicAndBobReceiveThisMessage_Success(t *testing.T) {
-	alice := Cli{addr: "http://localhost:8536"}
-	bob := Cli{addr: "http://localhost:8537"}
+	alice := newCLI()
+	bob := newCLI()
 
 	t.Log("Start nodes")
-	startLocalNode(8536)
+	startLocalNode(alice.Port())
 	defer stopLocalNode()
 
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("bob", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("bob", STATUSD_BIN, closeCh, "-shh", "-httpport="+bob.PortString(), "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
 
@@ -148,7 +175,7 @@ func TestAliceSendMessageToBobWithSymkeyAndTopicAndBobReceiveThisMessage_Success
 		t.Fatal(err)
 	}
 
-	t.Log("alice send to bob symkey and topic: %v  -  %v", topic, symkey)
+	t.Logf("alice send to bob symkey and topic: %v  -  %v\n", topic, symkey)
 
 	t.Log("Get symkey to bob node and get bobsymkeyID")
 	bobSymkeyID, err := bob.addSymkey(symkey)
@@ -191,19 +218,18 @@ func TestAliceSendMessageToBobWithSymkeyAndTopicAndBobReceiveThisMessage_Success
 }
 
 func TestAliceAndBobP2PMessagingExample_Success(t *testing.T) {
-	alice := Cli{addr: "http://localhost:8536"}
-	bob := Cli{addr: "http://localhost:8537"}
-	mailbox := Cli{addr: "http://localhost:8538"}
-	_ = mailbox
+	alice := newCLI()
+	bob := newCLI()
+	mailbox := newCLI()
 
 	t.Log("Start nodes")
-	startLocalNode(8536)
+	startLocalNode(alice.Port())
 	defer stopLocalNode()
 
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams...),
-		startNode("bob", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams(mailbox.PortString())...),
+		startNode("bob", STATUSD_BIN, closeCh, "-shh", "-httpport="+bob.PortString(), "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
 
@@ -227,7 +253,7 @@ func TestAliceAndBobP2PMessagingExample_Success(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	t.Log("alice send to bob symkey and topic: %v  -  %v", topic, symkey)
+	t.Logf("alice send to bob symkey and topic: %v  -  %v\n", topic, symkey)
 
 	t.Log("Get symkey to bob node and get bobsymkeyID")
 	bobSymkeyID, err := bob.addSymkey(symkey)
@@ -285,17 +311,17 @@ func TestAliceAndBobP2PMessagingExample_Success(t *testing.T) {
 }
 
 func TestGetWhisperMessageMailServer_Symmetric(t *testing.T) {
-	alice := Cli{addr: "http://localhost:8537"}
-	bob := Cli{addr: "http://localhost:8536"}
-	nMail := Cli{addr: "http://localhost:8538"}
+	alice := newCLI()
+	bob := newCLI()
+	mailbox := newCLI()
 
 	topic := whisperv5.BytesToTopic([]byte("TestGetWhisperMessageMailServer topic name"))
 
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams...),
-		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams(mailbox.PortString())...),
+		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport="+alice.PortString(), "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
 	defer func() {
@@ -320,7 +346,7 @@ func TestGetWhisperMessageMailServer_Symmetric(t *testing.T) {
 	time.Sleep(10 * time.Second)
 
 	t.Log("Start bob node")
-	startLocalNode(8536)
+	startLocalNode(bob.Port())
 	defer stopLocalNode()
 	time.Sleep(4 * time.Second)
 
@@ -365,7 +391,7 @@ func TestGetWhisperMessageMailServer_Symmetric(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mailServerPeerID, bobKeyFromPassword := bob.addMailServerNode(t, nMail)
+	mailServerPeerID, bobKeyFromPassword := bob.addMailServerNode(t, mailbox)
 
 	var params whisperv5.MessageParams
 	params.PoW = 1
@@ -399,18 +425,18 @@ func TestGetWhisperMessageMailServer_Symmetric(t *testing.T) {
 }
 
 func TestGetWhisperMessage_Asymmetric(t *testing.T) {
-	alice := Cli{addr: "http://localhost:8537"}
-	bob := Cli{addr: "http://localhost:8536"}
+	alice := newCLI()
+	bob := newCLI()
 
 	topic := whisperv5.BytesToTopic([]byte("TestGetWhisperMessage_Asymmetric topic name"))
 
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport="+alice.PortString(), "-http=true", "-datadir=w1"),
 	)
 	t.Log("Start bob node")
-	startLocalNode(8536)
+	startLocalNode(bob.Port())
 
 	time.Sleep(4 * time.Second)
 	defer func() {
@@ -459,21 +485,21 @@ func TestGetWhisperMessage_Asymmetric(t *testing.T) {
 }
 
 func TestGetWhisperMessageMailServer_Asymmetric(t *testing.T) {
-	alice := Cli{addr: "http://localhost:8537"}
-	bob := Cli{addr: "http://localhost:8536"}
-	nMail := Cli{addr: "http://localhost:8538"}
+	alice := newCLI()
+	bob := newCLI()
+	mailbox := newCLI()
 
 	topic := whisperv5.BytesToTopic([]byte("TestGetWhisperMessageMailServer topic name"))
 
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams...),
-		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams(mailbox.PortString())...),
+		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport="+alice.PortString(), "-http=true", "-datadir=w1"),
 	)
 
 	t.Log("Start bob node")
-	startLocalNode(8536)
+	startLocalNode(bob.Port())
 	time.Sleep(4 * time.Second)
 
 	defer func() {
@@ -518,8 +544,9 @@ func TestGetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 	time.Sleep(3 * time.Second)
 
 	t.Log("Resume bob node")
-	startLocalNode(8539)
-	bob = Cli{addr: "http://localhost:8539"}
+	bob = newCLI()
+	startLocalNode(bob.Port())
+	bob = cli{addr: "http://localhost:" + bob.PortString()}
 	time.Sleep(4 * time.Second)
 	defer stopLocalNode()
 
@@ -552,7 +579,7 @@ func TestGetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mailServerPeerID, bobKeyFromPassword := bob.addMailServerNode(t, nMail)
+	mailServerPeerID, bobKeyFromPassword := bob.addMailServerNode(t, mailbox)
 
 	// prepare and send request to mail server for archive messages
 	timeLow := uint32(time.Now().Add(-2 * time.Minute).Unix())
@@ -596,20 +623,20 @@ func TestGetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 }
 
 func Test_StatusdClient_GetWhisperMessageMailServer_Asymmetric(t *testing.T) {
-	alice := Cli{addr: "http://localhost:8537"}
-	bob := Cli{addr: "http://localhost:8536"}
-	nMail := Cli{addr: "http://localhost:8538"}
+	alice := newCLI()
+	bob := newCLI()
+	mailbox := newCLI()
 
 	topic := whisperv5.BytesToTopic([]byte("TestGetWhisperMessageMailServer topic name"))
 
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams...),
-		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams(mailbox.PortString())...),
+		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport="+alice.PortString(), "-http=true", "-datadir=w1"),
 	)
 	t.Log("Start bob node")
-	startLocalNode(8536)
+	startLocalNode(bob.Port())
 	time.Sleep(4 * time.Second)
 	defer func() {
 		close(closeCh)
@@ -653,8 +680,9 @@ func Test_StatusdClient_GetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 	time.Sleep(10 * time.Second)
 
 	t.Log("Resume bob node")
-	startLocalNode(8539)
-	bob = Cli{addr: "http://localhost:8539"}
+	bob = newCLI()
+	startLocalNode(bob.Port())
+	bob = cli{addr: "http://localhost:" + bob.PortString()}
 	time.Sleep(4 * time.Second)
 	defer stopLocalNode()
 
@@ -685,7 +713,7 @@ func Test_StatusdClient_GetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mailServerPeerID, bobKeyFromPassword := bob.addMailServerNode(t, nMail)
+	mailServerPeerID, bobKeyFromPassword := bob.addMailServerNode(t, mailbox)
 
 	// prepare and send request to mail server for archive messages
 	timeLow := uint32(time.Now().Add(-2 * time.Minute).Unix())
@@ -723,23 +751,38 @@ func Test_StatusdClient_GetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 	t.Log("Bob get alice message which sent from mailbox")
 	r, err = bob.getFilterMessages(bobFilterID)
 	t.Log(err, r)
-	if len(r.Result.([]interface{})) == 0 {
+
+	results := r.Result.([]interface{})
+	if len(results) == 0 {
 		t.Fatal("Hasnt got any messages")
+	}
+
+	for _, res := range results {
+		r := res.(map[string]interface{})
+
+		payloadHex := r["payload"].(string)
+		payload, err := hexutil.Decode(payloadHex)
+		if err != nil {
+			t.Fatal("Cant read payload", err)
+		}
+
+		//fixme add as assertion
+		t.Log("Result", string(payload))
 	}
 }
 
 func TestGetWhisperMessageMailServer_AllTopicMessages(t *testing.T) {
-	alice := Cli{addr: "http://localhost:8537"}
-	bob := Cli{addr: "http://localhost:8536"}
-	nMail := Cli{addr: "http://localhost:8538"}
+	alice := newCLI()
+	bob := newCLI()
+	mailbox := newCLI()
 
 	topic := whisperv5.BytesToTopic([]byte("TestGetWhisperMessageMailServer topic name"))
 
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams...),
-		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams(mailbox.PortString())...),
+		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport="+alice.PortString(), "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
 	defer func() {
@@ -764,7 +807,7 @@ func TestGetWhisperMessageMailServer_AllTopicMessages(t *testing.T) {
 	time.Sleep(10 * time.Second)
 
 	t.Log("Start bob node")
-	startLocalNode(8536)
+	startLocalNode(bob.Port())
 	defer stopLocalNode()
 	time.Sleep(4 * time.Second)
 
@@ -793,12 +836,6 @@ func TestGetWhisperMessageMailServer_AllTopicMessages(t *testing.T) {
 	}
 
 	time.Sleep(1 * time.Second)
-	t.Log("Bob check messages. There are no messages")
-	r, err := bob.getFilterMessages(bobFilterID)
-	if len(r.Result.([]interface{})) != 0 {
-		t.Fatal("Has got a messages")
-	}
-	t.Log(err, r)
 
 	// prepare and send request to mail server for archive messages
 	timeLow := uint32(time.Now().Add(-2 * time.Minute).Unix())
@@ -815,7 +852,7 @@ func TestGetWhisperMessageMailServer_AllTopicMessages(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	mailServerPeerID, bobKeyFromPassword := bob.addMailServerNode(t, nMail)
+	mailServerPeerID, bobKeyFromPassword := bob.addMailServerNode(t, mailbox)
 
 	var params whisperv5.MessageParams
 	params.PoW = 1
@@ -841,16 +878,34 @@ func TestGetWhisperMessageMailServer_AllTopicMessages(t *testing.T) {
 
 	time.Sleep(time.Second)
 	t.Log("Bob get alice message which sent from mailbox")
-	r, err = bob.getFilterMessages(bobFilterID)
+	r, err := bob.getFilterMessages(bobFilterID)
 	t.Log(err, r)
 	if len(r.Result.([]interface{})) != 2 {
 		t.Fatal("Hasnt got messages from Alice and Bob both")
 	}
+
+	results := r.Result.([]interface{})
+	if len(results) == 0 {
+		t.Fatal("Hasnt got any messages")
+	}
+
+	for _, res := range results {
+		r := res.(map[string]interface{})
+
+		payloadHex := r["payload"].(string)
+		payload, err := hexutil.Decode(payloadHex)
+		if err != nil {
+			t.Fatal("Cant read payload", err)
+		}
+
+		//fixme add as assertion
+		t.Log("Result", string(payload))
+	}
 }
 
 func TestAliceSendsMessageAndMessageExistsOnMailserverNode(t *testing.T) {
-	alice := Cli{addr: "http://localhost:8537"}
-	nMail := Cli{addr: "http://localhost:8538"}
+	alice := newCLI()
+	mailbox := newCLI()
 
 	t.Log("Create topic")
 	topic := whisperv5.BytesToTopic([]byte("TestAliceSendsMessageAndMessageExistsOnMailserverNode topic "))
@@ -858,8 +913,8 @@ func TestAliceSendsMessageAndMessageExistsOnMailserverNode(t *testing.T) {
 	t.Log("Start nodes")
 	closeCh := make(chan struct{})
 	doneFn := composeNodesClose(
-		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams...),
-		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport=8537", "-http=true", "-datadir=w1"),
+		startNode("mailserver", WNODE_BIN, closeCh, mailServerParams(mailbox.PortString())...),
+		startNode("alice", STATUSD_BIN, closeCh, "-shh", "-httpport="+alice.PortString(), "-http=true", "-datadir=w1"),
 	)
 	time.Sleep(4 * time.Second)
 	defer func() {
@@ -886,32 +941,51 @@ func TestAliceSendsMessageAndMessageExistsOnMailserverNode(t *testing.T) {
 	}
 
 	t.Log("Alice add symkey to mailserver")
-	symkeyIDMailserver, err := nMail.addSymkey(symkey)
+	symkeyIDMailserver, err := mailbox.addSymkey(symkey)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	t.Log("Alice make filter on mailserver")
-	msgFilterID2, err := nMail.makeMessageFilter(symkeyIDMailserver, topic.String())
+	msgFilterID2, err := mailbox.makeMessageFilter(symkeyIDMailserver, topic.String())
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	time.Sleep(time.Second)
 	t.Log("Check messages by filter")
-	r, err := nMail.getFilterMessages(msgFilterID2)
+	r, err := mailbox.getFilterMessages(msgFilterID2)
 	if len(r.Result.([]interface{})) == 0 {
 		t.Fatal("Hasn't got a messages")
 	}
 }
 
-type Cli struct {
+type cli struct {
 	addr string
+	p    port
 	c    http.Client
 }
 
+func newCLI(addr ...string) cli {
+	if len(addr) == 0 {
+		addr = []string{"http://localhost:"}
+	}
+
+	p := getFreePort()
+
+	return cli{addr: addr[0] + p.String(), p: p}
+}
+
+func (c cli) Port() int {
+	return c.p.Int()
+}
+
+func (c cli) PortString() string {
+	return c.p.String()
+}
+
 //create sym key
-func (c Cli) createSymkey() (string, error) {
+func (c cli) createSymkey() (string, error) {
 	r, err := makeBody(MakeRpcRequest("shh_newSymKey", nil))
 	if err != nil {
 		return "", err
@@ -928,7 +1002,7 @@ func (c Cli) createSymkey() (string, error) {
 }
 
 //create asym key
-func (c Cli) createAsymkey() (string, error) {
+func (c cli) createAsymkey() (string, error) {
 	r, err := makeBody(MakeRpcRequest("shh_newKeyPair", nil))
 	if err != nil {
 		return "", err
@@ -945,7 +1019,7 @@ func (c Cli) createAsymkey() (string, error) {
 }
 
 //get public key
-func (c Cli) getKeyPair(keyID string) (string, string, error) {
+func (c cli) getKeyPair(keyID string) (string, string, error) {
 	pk, err := c.getPrivateKey(keyID)
 	if err != nil {
 		return "", "", err
@@ -960,7 +1034,7 @@ func (c Cli) getKeyPair(keyID string) (string, string, error) {
 }
 
 //get private key
-func (c Cli) getPrivateKey(keyID string) (string, error) {
+func (c cli) getPrivateKey(keyID string) (string, error) {
 	r, err := makeBody(MakeRpcRequest("shh_getPrivateKey", []string{keyID}))
 	if err != nil {
 		return "", err
@@ -977,7 +1051,7 @@ func (c Cli) getPrivateKey(keyID string) (string, error) {
 }
 
 //get public key
-func (c Cli) getPublicKey(keyID string) (string, error) {
+func (c cli) getPublicKey(keyID string) (string, error) {
 	r, err := makeBody(MakeRpcRequest("shh_getPublicKey", []string{keyID}))
 	if err != nil {
 		return "", err
@@ -994,7 +1068,7 @@ func (c Cli) getPublicKey(keyID string) (string, error) {
 }
 
 //generate sym key
-func (c Cli) generateSymkeyFromPassword(password string) (string, error) {
+func (c cli) generateSymkeyFromPassword(password string) (string, error) {
 	r, err := makeBody(MakeRpcRequest("shh_generateSymKeyFromPassword", []string{password}))
 	if err != nil {
 		return "", err
@@ -1011,7 +1085,7 @@ func (c Cli) generateSymkeyFromPassword(password string) (string, error) {
 }
 
 //get sym key
-func (c Cli) getSymkey(s string) (string, error) {
+func (c cli) getSymkey(s string) (string, error) {
 	r, err := makeBody(MakeRpcRequest("shh_getSymKey", []string{s}))
 	if err != nil {
 		return "", err
@@ -1029,7 +1103,7 @@ func (c Cli) getSymkey(s string) (string, error) {
 
 //create sym key
 //curl -X POST --data '{"jsonrpc":"2.0","method":"shh_addSymKey","params":["0xf6dcf21ed6a17bd78d8c4c63195ab997b3b65ea683705501eae82d32667adc92"],"id":1}'
-func (c Cli) addSymkey(s string) (string, error) {
+func (c cli) addSymkey(s string) (string, error) {
 	r, err := makeBody(MakeRpcRequest("shh_addSymKey", []string{s}))
 	if err != nil {
 		return "", err
@@ -1046,7 +1120,7 @@ func (c Cli) addSymkey(s string) (string, error) {
 }
 
 // add private key
-func (c Cli) addPrivateKey(s string) (string, error) {
+func (c cli) addPrivateKey(s string) (string, error) {
 	r, err := makeBody(MakeRpcRequest("shh_addPrivateKey", []string{s}))
 	if err != nil {
 		return "", err
@@ -1062,12 +1136,12 @@ func (c Cli) addPrivateKey(s string) (string, error) {
 	return rsp.Result.(string), nil
 }
 
-//post wisper message
-func (c Cli) postMessage(symKeyID string, topic string, ttl int, targetPeer string) (RpcResponse, error) {
+//post whisper message
+func (c cli) postMessage(symKeyID string, topic string, ttl int, targetPeer string) (RpcResponse, error) {
 	r, err := makeBody(MakeRpcRequest("shh_post", []shhPost{{
 		SymKeyId:   symKeyID,
 		Topic:      topic,
-		Payload:    "0x73656e74206265666f72652066696c7465722077617320616374697665202873796d6d657472696329",
+		Payload:    hexutil.Encode([]byte("hello in symmetric style!")),
 		PowTarget:  0.001,
 		PowTime:    1,
 		TTL:        ttl,
@@ -1085,11 +1159,11 @@ func (c Cli) postMessage(symKeyID string, topic string, ttl int, targetPeer stri
 }
 
 //post wisper message with asymmetric encryption
-func (c Cli) postAsymMessage(pubKey, topic string, ttl int, targetPeer string) (RpcResponse, error) {
+func (c cli) postAsymMessage(pubKey, topic string, ttl int, targetPeer string) (RpcResponse, error) {
 	r, err := makeBody(MakeRpcRequest("shh_post", []shhPost{{
 		PubKey:     pubKey,
 		Topic:      topic,
-		Payload:    "0x73656e74206265666f72652066696c7465722077617320616374697665202873796d6d657472696329",
+		Payload:    hexutil.Encode([]byte("hello world!!")),
 		PowTarget:  0.001,
 		PowTime:    1,
 		TTL:        119,
@@ -1106,7 +1180,7 @@ func (c Cli) postAsymMessage(pubKey, topic string, ttl int, targetPeer string) (
 	return makeRpcResponse(resp.Body)
 }
 
-func (c Cli) makeMessageFilter(symKeyID string, topic string) (string, error) {
+func (c cli) makeMessageFilter(symKeyID string, topic string) (string, error) {
 	//make filter
 	r, err := makeBody(MakeRpcRequest("shh_newMessageFilter", []shhNewMessageFilter{{
 		SymKeyId: symKeyID,
@@ -1129,7 +1203,7 @@ func (c Cli) makeMessageFilter(symKeyID string, topic string) (string, error) {
 	return rsp.Result.(string), nil
 }
 
-func (c Cli) makeAsyncMessageFilter(privateKeyID string, topic string) (string, error) {
+func (c cli) makeAsyncMessageFilter(privateKeyID string, topic string) (string, error) {
 	//make filter
 	r, err := makeBody(MakeRpcRequest("shh_newMessageFilter", []shhNewMessageFilter{{
 		PrivateKeyID: privateKeyID,
@@ -1137,32 +1211,27 @@ func (c Cli) makeAsyncMessageFilter(privateKeyID string, topic string) (string, 
 		AllowP2P:     true,
 	}}))
 	if err != nil {
-		fmt.Println("11111", err)
 		return "", err
 	}
 
 	resp, err := c.c.Post(c.addr, "application/json", r)
 	if err != nil {
-		fmt.Println("222222", err)
 		return "", err
 	}
 
 	rsp, err := makeRpcResponse(resp.Body)
 	if err != nil {
-		cnf, _ := backend.NodeManager().NodeConfig()
-		fmt.Println("333333", err, cnf.HTTPPort, cnf.Name, c.addr)
 		return "", err
 	}
 
 	if rsp.Error.Message != "" {
-		fmt.Println("444444", err)
 		return "", errors.New(rsp.Error.Message)
 	}
 
 	return rsp.Result.(string), nil
 }
 
-func (c Cli) getFilterMessages(msgFilterID string) (RpcResponse, error) {
+func (c cli) getFilterMessages(msgFilterID string) (RpcResponse, error) {
 	r, err := makeBody(MakeRpcRequest("shh_getFilterMessages", []string{msgFilterID}))
 	if err != nil {
 		return RpcResponse{}, err
@@ -1175,7 +1244,7 @@ func (c Cli) getFilterMessages(msgFilterID string) (RpcResponse, error) {
 	return makeRpcResponse(resp.Body)
 }
 
-func (c Cli) getNodeInfo() (map[string]interface{}, error) {
+func (c cli) getNodeInfo() (map[string]interface{}, error) {
 	r, err := makeBody(MakeRpcRequest("admin_nodeInfo", []string{}))
 	if err != nil {
 		return nil, err
@@ -1191,7 +1260,7 @@ func (c Cli) getNodeInfo() (map[string]interface{}, error) {
 	}
 	return rsp.Result.(map[string]interface{}), nil
 }
-func (c Cli) adminAddPeer(enode string) (RpcResponse, error) {
+func (c cli) adminAddPeer(enode string) (RpcResponse, error) {
 	r, err := makeBody(MakeRpcRequest("admin_addPeer", []string{enode}))
 	if err != nil {
 		return RpcResponse{}, err
@@ -1209,7 +1278,7 @@ func (c Cli) adminAddPeer(enode string) (RpcResponse, error) {
 }
 
 //curl -X POST --data '{"jsonrpc":"2.0","method":"shh_markTrustedPeer","params":["enode://d25474361659861e9e651bc728a17e807a3359ca0d344afd544ed0f11a31faecaf4d74b55db53c6670fd624f08d5c79adfc8da5dd4a11b9213db49a3b750845e@52.178.209.125:30379"],"id":1}'
-func (c Cli) markTrusted(enode string) (RpcResponse, error) {
+func (c cli) markTrusted(enode string) (RpcResponse, error) {
 	r, err := makeBody(MakeRpcRequest("shh_markTrustedPeer", []string{enode}))
 	if err != nil {
 		return RpcResponse{}, err
@@ -1226,7 +1295,7 @@ func (c Cli) markTrusted(enode string) (RpcResponse, error) {
 	return rsp, nil
 }
 
-func (c Cli) addMailServerNode(t *testing.T, nMail Cli) (mailServerPeerID, bobKeyFromPassword []byte) {
+func (c cli) addMailServerNode(t *testing.T, nMail cli) (mailServerPeerID, bobKeyFromPassword []byte) {
 	mNodeInfo, err := nMail.getNodeInfo()
 	if err != nil {
 		t.Fatal(err)
@@ -1274,6 +1343,7 @@ func makeBody(r RpcRequest) (io.Reader, error) {
 	}
 	return bytes.NewReader(b), nil
 }
+
 func makeRpcResponse(r io.Reader) (RpcResponse, error) {
 	rsp := RpcResponse{}
 	err := json.NewDecoder(r).Decode(&rsp)
