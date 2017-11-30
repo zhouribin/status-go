@@ -546,7 +546,6 @@ func TestGetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 	t.Log("Resume bob node")
 	bob = newCLI()
 	startLocalNode(bob.Port())
-	bob = cli{addr: "http://localhost:" + bob.PortString()}
 	time.Sleep(4 * time.Second)
 	defer stopLocalNode()
 
@@ -682,7 +681,6 @@ func Test_StatusdClient_GetWhisperMessageMailServer_Asymmetric(t *testing.T) {
 	t.Log("Resume bob node")
 	bob = newCLI()
 	startLocalNode(bob.Port())
-	bob = cli{addr: "http://localhost:" + bob.PortString()}
 	time.Sleep(4 * time.Second)
 	defer stopLocalNode()
 
