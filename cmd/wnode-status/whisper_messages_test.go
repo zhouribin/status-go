@@ -21,30 +21,11 @@ import (
 	"time"
 )
 
+//see api at https://github.com/ethereum/go-ethereum/wiki/Whisper-v5-RPC-API
 const (
 	WNODE_BIN   = "./wnode-status"
 	STATUSD_BIN = "./statusd"
 )
-
-//see api at https://github.com/ethereum/go-ethereum/wiki/Whisper-v5-RPC-API
-/*
-
-{"jsonrpc": "2.0", "method": "shh_post", "params": [
-{
-"symKeyID": "14af8a4f90f90bff29ff24ee41e35d95684ddb513afc3c0f3fc15557a603ebd4",
-"topic": "0xe00123a5",
-"payload": "0x73656e74206265666f72652066696c7465722077617320616374697665202873796d6d657472696329",
-"powTarget": 0.001,
-"powTime": 2
-}
-], "id": 9999999999}
-
-{"jsonrpc": "2.0", "method": "shh_newMessageFilter", "params": [
-{"symKeyID": "e48b4ef9a55ff1f4f87d3dc9883fdf9a53fc7d982e29af83d13048320b70ed65", "topics": [ "0xdeadbeef", "0xbeefdead", "0x20028f4c"]}
-], "id": 9999999999}
-
-{"jsonrpc": "2.0", "method": "shh_getFilterMessages", "params": ["fc202cbafc840d249420dd9a61bfd8bf6a9b339f336359aafad5e5f2aca71901"], "id": 9999999999}
-*/
 
 type shhPost struct {
 	SymKeyId   string  `json:"symKeyID,omitempty"`
@@ -63,29 +44,6 @@ type shhNewMessageFilter struct {
 	Topics       []string `json:"topics,omitempty"`
 	AllowP2P     bool     `json:"allowP2P,omitempty"`
 }
-
-//{"jsonrpc": "2.0", "method": "admin_nodeInfo", "params": [], "id": 9999999999}
-/*
-{
-	"id": "5db6b0e6f9bc762b76b4a50180b2f35c22ab12bf465d805958340800b070bd364f9ec40fe1f76db780baad1cbab96b7a60e02f106daf3cf9a1de77d326888741",
-	"name": "StatusIM/v0.9.9-unstable/linux-amd64/go1.8.3",
-	"enode": "enode://5db6b0e6f9bc762b76b4a50180b2f35c22ab12bf465d805958340800b070bd364f9ec40fe1f76db780baad1cbab96b7a60e02f106daf3cf9a1de77d326888741@[::]:30303?discport=0",
-	"ip": "::",
-	"ports": {
-		"discovery": 0,
-		"listener": 30303
-	},
-	"listenAddr": "[::]:30303",
-	"protocols": {
-		"shh": {
-			"maxMessageSize": 1048576,
-			"minimumPoW": 0.001,
-			"version": "5.0"
-		}
-	}
-}
-
-*/
 
 type RpcRequest struct {
 	Version string      `json:"jsonrpc"`
@@ -986,6 +944,17 @@ func (c cli) addPrivateKey(s string) (string, error) {
 }
 
 //post whisper message
+//{"jsonrpc": "2.0", "method": "shh_post", "params": [
+//{
+//"symKeyID": "14af8a4f90f90bff29ff24ee41e35d95684ddb513afc3c0f3fc15557a603ebd4",
+//"topic": "0xe00123a5",
+//"payload": "0x73656e74206265666f72652066696c7465722077617320616374697665202873796d6d657472696329",
+//"powTarget": 0.001,
+//"powTime": 2
+//}
+//], "id": 9999999999}
+//
+
 func (c cli) postMessage(symKeyID string, topic string, ttl int, targetPeer string) (RpcResponse, error) {
 	r, err := makeBody(MakeRpcRequest("shh_post", []shhPost{{
 		SymKeyId:   symKeyID,
@@ -1029,6 +998,10 @@ func (c cli) postAsymMessage(pubKey, topic string, ttl int, targetPeer string) (
 	return makeRpcResponse(resp.Body)
 }
 
+//Make message filter
+//{"jsonrpc": "2.0", "method": "shh_newMessageFilter", "params": [
+//{"symKeyID": "e48b4ef9a55ff1f4f87d3dc9883fdf9a53fc7d982e29af83d13048320b70ed65", "topics": [ "0xdeadbeef", "0xbeefdead", "0x20028f4c"]}
+//], "id": 9999999999}
 func (c cli) makeMessageFilter(symKeyID string, topic string) (string, error) {
 	//make filter
 	r, err := makeBody(MakeRpcRequest("shh_newMessageFilter", []shhNewMessageFilter{{
@@ -1080,6 +1053,7 @@ func (c cli) makeAsyncMessageFilter(privateKeyID string, topic string) (string, 
 	return rsp.Result.(string), nil
 }
 
+//{"jsonrpc": "2.0", "method": "shh_getFilterMessages", "params": ["fc202cbafc840d249420dd9a61bfd8bf6a9b339f336359aafad5e5f2aca71901"], "id": 9999999999}
 func (c cli) getFilterMessages(msgFilterID string) (RpcResponse, error) {
 	r, err := makeBody(MakeRpcRequest("shh_getFilterMessages", []string{msgFilterID}))
 	if err != nil {
@@ -1093,6 +1067,28 @@ func (c cli) getFilterMessages(msgFilterID string) (RpcResponse, error) {
 	return makeRpcResponse(resp.Body)
 }
 
+//{"jsonrpc": "2.0", "method": "admin_nodeInfo", "params": [], "id": 9999999999}
+/*
+{
+	"id": "5db6b0e6f9bc762b76b4a50180b2f35c22ab12bf465d805958340800b070bd364f9ec40fe1f76db780baad1cbab96b7a60e02f106daf3cf9a1de77d326888741",
+	"name": "StatusIM/v0.9.9-unstable/linux-amd64/go1.8.3",
+	"enode": "enode://5db6b0e6f9bc762b76b4a50180b2f35c22ab12bf465d805958340800b070bd364f9ec40fe1f76db780baad1cbab96b7a60e02f106daf3cf9a1de77d326888741@[::]:30303?discport=0",
+	"ip": "::",
+	"ports": {
+		"discovery": 0,
+		"listener": 30303
+	},
+	"listenAddr": "[::]:30303",
+	"protocols": {
+		"shh": {
+			"maxMessageSize": 1048576,
+			"minimumPoW": 0.001,
+			"version": "5.0"
+		}
+	}
+}
+
+*/
 func (c cli) getNodeInfo() (map[string]interface{}, error) {
 	r, err := makeBody(MakeRpcRequest("admin_nodeInfo", []string{}))
 	if err != nil {
