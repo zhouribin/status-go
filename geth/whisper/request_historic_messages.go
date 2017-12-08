@@ -4,7 +4,7 @@ import (
 	"context"
 	"crypto/ecdsa"
 	"encoding/binary"
-	"fmt"
+	"errors"
 	"time"
 
 	"github.com/ethereum/go-ethereum/whisper/whisperv5"
@@ -12,28 +12,21 @@ import (
 	"github.com/status-im/status-go/geth/rpc"
 )
 
+// whisper related errors
 var (
-	//ErrInvalidNumberOfArgs - error invalid aruments in request
-	ErrInvalidNumberOfArgs = fmt.Errorf("invalid number of arguments, expected 1")
-	//ErrInvalidArgs - error invalid request format
-	ErrInvalidArgs = fmt.Errorf("invalid args")
-	//ErrTopicNotExist - error topic field doesn't exist in request
-	ErrTopicNotExist = fmt.Errorf("topic value does not exist")
-	//ErrTopicNotString - error topic is not string type
-	ErrTopicNotString = fmt.Errorf("topic value is not string")
-	//ErrMailboxSymkeyIDNotExist - error symKeyID field doesn't exist in request
-	ErrMailboxSymkeyIDNotExist = fmt.Errorf("symKeyID does not exist")
-	//ErrMailboxSymkeyIDNotString - error symKeyID is not string type
-	ErrMailboxSymkeyIDNotString = fmt.Errorf("symKeyID is not string")
-	//ErrPeerNotExist - error peer field doesn't exist in request
-	ErrPeerNotExist = fmt.Errorf("peer does not exist")
-	//ErrPeerNotString - error peer is not string type
-	ErrPeerNotString = fmt.Errorf("peer is not string")
+	ErrInvalidNumberOfArgs      = errors.New("invalid number of arguments, expected 1")
+	ErrInvalidArgs              = errors.New("invalid args")
+	ErrTopicNotExist            = errors.New("topic value does not exist")
+	ErrTopicNotString           = errors.New("topic value is not string")
+	ErrMailboxSymkeyIDNotExist  = errors.New("symKeyID does not exist")
+	ErrMailboxSymkeyIDNotString = errors.New("symKeyID is not string")
+	ErrPeerNotExist             = errors.New("peer does not exist")
+	ErrPeerNotString            = errors.New("peer is not string")
 )
 
 const defaultWorkTime = 5
 
-//RequestHistoricMessagesHandler returns an RPC handler which sends a p2p request for historic messages.
+// RequestHistoricMessagesHandler returns an RPC handler which sends a p2p request for historic messages.
 func RequestHistoricMessagesHandler(nodeManager common.NodeManager) (rpc.Handler, error) {
 	whisper, err := nodeManager.WhisperService()
 	if err != nil {
@@ -46,7 +39,7 @@ func RequestHistoricMessagesHandler(nodeManager common.NodeManager) (rpc.Handler
 	}
 
 	return func(ctx context.Context, args ...interface{}) (interface{}, error) {
-		r, err := parseArgs(args)
+		r, err := requestFromArgs(args)
 		if err != nil {
 			return nil, err
 		}
@@ -55,6 +48,7 @@ func RequestHistoricMessagesHandler(nodeManager common.NodeManager) (rpc.Handler
 		if err != nil {
 			return nil, err
 		}
+
 		r.PoW = whisper.MinPow()
 		env, err := makeEnvelop(r, symkey, node.Server().PrivateKey)
 		if err != nil {
@@ -71,21 +65,20 @@ func RequestHistoricMessagesHandler(nodeManager common.NodeManager) (rpc.Handler
 }
 
 type historicMessagesRequest struct {
-	Peer     []byte              //mailbox peer
-	TimeLow  uint32              //resend messages from
-	TimeUp   uint32              //resend messages to
-	Topic    whisperv5.TopicType //resend messages by topic
-	SymkeyID string              //Mailbox symmetric key id
-	PoW      float64             //whisper proof of work
+	Peer     []byte              // mailbox peer
+	TimeLow  uint32              // resend messages from
+	TimeUp   uint32              // resend messages to
+	Topic    whisperv5.TopicType // resend messages by topic
+	SymkeyID string              // mailbox symmetric key id
+	PoW      float64             // whisper proof of work
 }
 
-func parseArgs(args ...interface{}) (historicMessagesRequest, error) {
-	var (
-		r = historicMessagesRequest{
-			TimeLow: uint32(time.Now().Add(-24 * time.Hour).Unix()),
-			TimeUp:  uint32(time.Now().Unix()),
-		}
-	)
+// requestFromArgs constructs new request from arguments.
+func requestFromArgs(args ...interface{}) (historicMessagesRequest, error) {
+	var r = historicMessagesRequest{
+		TimeLow: uint32(time.Now().Add(-24 * time.Hour).Unix()),
+		TimeUp:  uint32(time.Now().Unix()),
+	}
 
 	if len(args) != 1 {
 		return historicMessagesRequest{}, ErrInvalidNumberOfArgs
@@ -141,7 +134,8 @@ func parseArgs(args ...interface{}) (historicMessagesRequest, error) {
 	return r, nil
 }
 
-//makeEnvelop make envelop for request histtoric messages. symmetric key to authenticate to MailServer node and pk is the current node ID.
+// makeEnvelop makes envelop for request historic messages.
+// symmetric key to authenticate to MailServer node and pk is the current node ID.
 func makeEnvelop(r historicMessagesRequest, symkey []byte, pk *ecdsa.PrivateKey) (*whisperv5.Envelope, error) {
 	var params whisperv5.MessageParams
 	params.PoW = r.PoW
@@ -157,7 +151,7 @@ func makeEnvelop(r historicMessagesRequest, symkey []byte, pk *ecdsa.PrivateKey)
 	return message.Wrap(&params)
 }
 
-//makePayloadData make specific payload for mailserver
+// makePayloadData makes specific payload for mailserver.
 func makePayloadData(r historicMessagesRequest) []byte {
 	data := make([]byte, 8+whisperv5.TopicLength)
 	binary.BigEndian.PutUint32(data, r.TimeLow)
