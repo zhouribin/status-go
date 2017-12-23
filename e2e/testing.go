@@ -24,6 +24,8 @@ func WithUpstream(url string) TestNodeOption {
 	}
 }
 
+var n int
+
 // MakeTestNodeConfig defines a function to return a giving params.NodeConfig
 // where specific network addresses are assigned based on provieded network id.
 func MakeTestNodeConfig(networkID int) (*params.NodeConfig, error) {
@@ -40,9 +42,10 @@ func MakeTestNodeConfig(networkID int) (*params.NodeConfig, error) {
 		errorLevel = "INFO"
 	}
 
+	n++
 	configJSON := `{
 		"NetworkId": ` + strconv.Itoa(networkID) + `,
-		"DataDir": "` + testDir + `",
+		"DataDir": "` + testDir + strconv.Itoa(n) + `",
 		"HTTPPort": ` + strconv.Itoa(TestConfig.Node.HTTPPort) + `,
 		"WSPort": ` + strconv.Itoa(TestConfig.Node.WSPort) + `,
 		"LogLevel": "` + errorLevel + `"

@@ -604,6 +604,11 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 			// this should not happen, but no need to panic; just ignore this message.
 			log.Warn("unxepected status message received", "peer", p.peer.ID())
 		case messagesCode:
+			if wh.mailServer != nil {
+				log.Warn("STATUS. Mailserver. You've got broadcast message", "peer", p.peer.ID())
+			} else {
+				log.Warn("STATUS. User. You've got broadcast message", "peer", p.peer.ID())
+			}
 			// decode the contained envelopes
 			var envelope Envelope
 			if err := packet.Decode(&envelope); err != nil {
@@ -619,6 +624,11 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				p.mark(&envelope)
 			}
 		case p2pCode:
+			if wh.mailServer != nil {
+				log.Warn("STATUS. Mailserver. You've got a direct message", "peer", p.peer.ID())
+			} else {
+				log.Warn("STATUS. User. You've got a direct message", "peer", p.peer.ID())
+			}
 			// peer-to-peer message, sent directly to peer bypassing PoW checks, etc.
 			// this message is not supposed to be forwarded to other peers, and
 			// therefore might not satisfy the PoW, expiry and other requirements.
@@ -635,6 +645,7 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				wh.postEvent(&envelope, true)
 			}
 		case p2pRequestCode:
+			log.Warn("STATUS. Mailserver request!", "peer", p.peer.ID())
 			// Must be processed if mail server is implemented. Otherwise ignore.
 			if wh.mailServer != nil {
 				var request Envelope
