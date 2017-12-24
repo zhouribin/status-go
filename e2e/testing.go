@@ -46,7 +46,7 @@ func MakeTestNodeConfig(networkID int) (*params.NodeConfig, error) {
 	configJSON := `{
 		"NetworkId": ` + strconv.Itoa(networkID) + `,
 		"DataDir": "` + testDir + strconv.Itoa(n) + `",
-		"HTTPPort": ` + strconv.Itoa(TestConfig.Node.HTTPPort) + `,
+		"HTTPPort": ` + strconv.Itoa(TestConfig.Node.HTTPPort+n) + `,
 		"WSPort": ` + strconv.Itoa(TestConfig.Node.WSPort) + `,
 		"LogLevel": "` + errorLevel + `"
 	}`

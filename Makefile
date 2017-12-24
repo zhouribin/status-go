@@ -125,6 +125,15 @@ test-e2e: ##@tests Run e2e tests
 	# e2e_test tag is required to include some files from ./lib without _test suffix
 	go test -timeout 40m -tags e2e_test ./lib -network=$(networkid)
 
+test-shh-v:
+	go test ./e2e/whisper/... -v -run=TestWhisperMailboxTestSuite -network=777 > 1.txt
+
+test-shh:
+	go test ./e2e/whisper/... -run=TestWhisperMailboxTestSuite -network=777 > 1.txt
+
+shh-ws:
+	grep "STATUS. User." 1.txt |  wc -l
+
 ci: lint mock test-unit test-e2e ##@tests Run all linters and tests at once
 
 clean: ##@other Cleanup

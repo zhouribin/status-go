@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"fmt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
@@ -14,6 +15,7 @@ import (
 	"github.com/status-im/status-go/geth/api"
 	. "github.com/status-im/status-go/testing"
 	"github.com/stretchr/testify/suite"
+	"sync"
 )
 
 type WhisperMailboxSuite struct {
@@ -26,6 +28,12 @@ func TestWhisperMailboxTestSuite(t *testing.T) {
 
 func (s *WhisperMailboxSuite) TestRequestMessageFromMailboxAsync() {
 	//arrange
+	//create topic
+	users := 10
+	rounds := 10
+
+	topic := whisperv5.BytesToTopic([]byte("topic name"))
+
 	mailboxBackend, stop := s.startMailboxBackend()
 	defer stop()
 	mailboxNode, err := mailboxBackend.NodeManager().Node()
@@ -35,13 +43,38 @@ func (s *WhisperMailboxSuite) TestRequestMessageFromMailboxAsync() {
 	sender, stop := s.startBackend()
 	defer stop()
 
-	for i := 0; i < 5; i++ {
+	var ps []*api.StatusBackend
+	ps = append(ps, sender)
+	for i := 0; i < users-1; i++ {
 		n, stop := s.startBackend()
 		defer stop()
 
-		err = n.NodeManager().AddPeer(mailboxEnode)
+		ps = append(ps, n)
+	}
+
+	for _, n := range ps {
+		node, err := n.NodeManager().Node()
+		s.Require().NoError(err)
+		enode := node.Server().NodeInfo().Enode
+
+		fmt.Println("!!!!!!!!!!!!!", enode)
+	}
+
+	for _, n0 := range ps {
+		for _, n := range ps {
+			node, err := n.NodeManager().Node()
+			s.Require().NoError(err)
+			enode := node.Server().NodeInfo().Enode
+
+			err = n0.NodeManager().AddPeer(enode)
+			s.Require().NoError(err)
+		}
+
+		err = n0.NodeManager().AddPeer(mailboxEnode)
 		s.Require().NoError(err)
 	}
+
+	time.Sleep(5 * time.Second)
 
 	node, err := sender.NodeManager().Node()
 	s.Require().NoError(err)
@@ -74,9 +107,6 @@ func (s *WhisperMailboxSuite) TestRequestMessageFromMailboxAsync() {
 
 	rpcClient := sender.NodeManager().RPCClient()
 	s.Require().NotNil(rpcClient)
-
-	//create topic
-	topic := whisperv5.BytesToTopic([]byte("topic name"))
 
 	//Add key pair to whisper
 	keyID, err := w.NewKeyPair()
@@ -153,6 +183,64 @@ func (s *WhisperMailboxSuite) TestRequestMessageFromMailboxAsync() {
 	s.Require().Equal(0, len(messages.Result))
 
 	time.Sleep(10 * time.Second)
+
+	for i := 0; i < rounds; i++ {
+		wg := sync.WaitGroup{}
+		wg.Add(len(ps))
+		for _, n := range ps {
+			go func(n *api.StatusBackend) {
+				time.Sleep(10 * time.Millisecond)
+				//Add key pair to whisper
+				w, err := n.NodeManager().WhisperService()
+				s.Require().NoError(err)
+
+				keyID, err := w.NewKeyPair()
+				s.Require().NoError(err)
+
+				key, err := w.GetPrivateKey(keyID)
+				s.Require().NoError(err)
+				pubkey := hexutil.Bytes(crypto.FromECDSAPub(&key.PublicKey))
+
+				//Create message filter
+				resp := n.NodeManager().RPCClient().CallRaw(`{
+					"jsonrpc": "2.0",
+					"method": "shh_newMessageFilter", "params": [
+						{"privateKeyID": "` + keyID + `", "topics": [ "` + topic.String() + `"], "allowP2P":true}
+					],
+					"id": 1
+				}`)
+
+				msgFilterResp := newMessagesFilterResponse{}
+				err = json.Unmarshal([]byte(resp), &msgFilterResp)
+				messageFilterID := msgFilterResp.Result
+				s.Require().NoError(err)
+				s.Require().NotEqual("", messageFilterID)
+
+				//Post message
+				resp = n.NodeManager().RPCClient().CallRaw(`{
+				"jsonrpc": "2.0",
+				"method": "shh_post",
+				"params": [
+					{
+					"pubKey": "` + pubkey.String() + `",
+					"topic": "` + topic.String() + `",
+					"payload": "0x73656e74206265666f72652066696c7465722077617320616374697665202873796d6d657472696329",
+					"powTarget": 0.001,
+					"powTime": 2
+					}
+				],
+				"id": 1}`)
+				postResp := baseRPCResponse{}
+				err = json.Unmarshal([]byte(resp), &postResp)
+				s.Require().NoError(err)
+				s.Require().Nil(postResp.Err)
+
+				wg.Done()
+			}(n)
+		}
+		wg.Wait()
+		time.Sleep(100 * time.Millisecond)
+	}
 	//act
 
 	/*
