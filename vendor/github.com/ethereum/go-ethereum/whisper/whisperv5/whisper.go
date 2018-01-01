@@ -585,6 +585,9 @@ func (wh *Whisper) HandlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return wh.runMessageLoop(whisperPeer, rw)
 }
 
+var t int
+var topicS = BytesToTopic([]byte("test topic"))
+
 // runMessageLoop reads and processes inbound messages directly to merge into client-global state.
 func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 	for {
@@ -610,6 +613,11 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				log.Warn("failed to decode envelope, peer will be disconnected", "peer", p.peer.ID(), "err", err)
 				return errors.New("invalid envelope")
 			}
+			if topicS.String()==envelope.Topic.String() {
+				t++
+				fmt.Println("T:", t, envelope.Topic.String())
+			}
+
 			cached, err := wh.add(&envelope)
 			if err != nil {
 				log.Warn("bad envelope received, peer will be disconnected", "peer", p.peer.ID(), "err", err)

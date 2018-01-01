@@ -133,3 +133,12 @@ clean: ##@other Cleanup
 
 deep-clean: clean
 	rm -Rdf .ethereumtest/StatusChain
+
+
+bench-one-topic:
+	go test ./e2e/whisper/whisper_send_message_test.go -run TestWhisperSendMessagesOneTopic &
+	go test -v ./e2e/whisper/whisper_send_message_test.go -run TestWhisperReceive -cpuprofile cpu_bench_one.prof
+
+bench-many-topics:
+	go test ./e2e/whisper/whisper_send_message_test.go -run TestWhisperSendMessagesWithDifferentTopics &
+	go test -v ./e2e/whisper/whisper_send_message_test.go -run TestWhisperReceive -cpuprofile cpu_bench_many.prof
