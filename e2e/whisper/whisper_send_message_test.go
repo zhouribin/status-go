@@ -14,6 +14,8 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/status-im/status-go/geth/rpc"
 	"io/ioutil"
+	"runtime"
+	"path"
 )
 
 const DURATION  = 300*time.Second
@@ -29,7 +31,7 @@ func TestWhisperReceive(t *testing.T) {
 		case <-tm:
 			t.Fatal("env benchenode should contains mailbox enode")
 		default:
-			b,err:=ioutil.ReadFile("/home/b00ris/go/src/github.com/status-im/status-go/enode.txt")
+			b,err:=ioutil.ReadFile(getEnodeFilePath())
 			if err!=nil {
 				continue
 			}
@@ -80,11 +82,11 @@ func TestWhisperSendMessagesOneTopic(t *testing.T) {
 	}
 
 	enode := node.Server().NodeInfo().Enode
-	err=ioutil.WriteFile("/home/b00ris/go/src/github.com/status-im/status-go/enode.txt",[]byte(enode),os.ModePerm)
+	err=ioutil.WriteFile(getEnodeFilePath(),[]byte(enode),os.ModePerm)
 	if err!=nil {
 		t.Fatal(err)
 	}
-	defer os.Remove("/home/b00ris/go/src/github.com/status-im/status-go/enode.txt")
+	defer os.Remove(getEnodeFilePath())
 
 
 	backends:=make([]*api.StatusBackend, 5)
@@ -150,11 +152,11 @@ func TestWhisperSendMessagesWithDifferentTopics(t *testing.T) {
 	defer stop()
 	node,_:=mailbox.NodeManager().Node()
 	enode := node.Server().NodeInfo().Enode
-	err:=ioutil.WriteFile("/home/b00ris/go/src/github.com/status-im/status-go/enode.txt",[]byte(enode),os.ModePerm)
+	err:=ioutil.WriteFile(getEnodeFilePath(),[]byte(enode),os.ModePerm)
 	if err!=nil {
 		t.Fatal(err)
 	}
-	defer os.Remove("/home/b00ris/go/src/github.com/status-im/status-go/enode.txt")
+	defer os.Remove(getEnodeFilePath())
 
 
 	backends:=make([]*api.StatusBackend, 5)
@@ -275,4 +277,9 @@ func createPrivateChatMessageFilter(rpcCli *rpc.Client, privateKeyID string, top
 		}`)
 
 	return resp
+}
+
+func getEnodeFilePath() string  {
+	_,f,_,_:=runtime.Caller(0)
+	return path.Dir(f)+"/enode.txt"
 }
