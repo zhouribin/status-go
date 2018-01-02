@@ -12,7 +12,6 @@ import (
 	"testing"
 	"time"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/crypto/sha3"
@@ -33,7 +32,7 @@ func BenchmarkWhisperReceiveSingleTopicNoMatch(b *testing.B) {
 }
 
 func BenchmarkWhisperReceiveManyTopicsNoMatch(b *testing.B) {
-	benchWhisperReceiveTopics(b, 100, []byte("test unique topic"))
+	benchWhisperReceiveTopics(b, 1000, []byte("test unique topic"))
 }
 
 func BenchmarkWhisperReceiveSingleTopicMatch(b *testing.B) {
@@ -41,10 +40,10 @@ func BenchmarkWhisperReceiveSingleTopicMatch(b *testing.B) {
 }
 
 func BenchmarkWhisperReceiveManyTopicsMatch(b *testing.B) {
-	benchWhisperReceiveTopics(b, 100, getTopic(0))
+	benchWhisperReceiveTopics(b, 1000, getTopic(0))
 }
 
-func benchWhisperReceiveTopics(b *testing.B, topicsCount int, topicStr []byte) {
+func benchWhisperReceiveTopics(b *testing.B, topicsCount int, topicBytes []byte) {
 	defer func() {
 		log.Println("!!!!!!!! DONE benchWhisperReceiveTopics\n\n")
 	}()
@@ -75,22 +74,8 @@ func benchWhisperReceiveTopics(b *testing.B, topicsCount int, topicStr []byte) {
 		b.Fatal(err)
 	}
 	defer func() {
-		chErr := make(chan error, 1)
-		timeout := time.NewTimer(5 * time.Second)
-
-		go func() {
-			chErr <- senders.Wait()
-		}()
-
-		select {
-		case err = <-chErr:
-			if err != nil {
-				b.Fatal(err)
-			}
-		case <-timeout.C:
-			if err := senders.Process.Kill(); err != nil {
-				b.Fatal(err)
-			}
+		if err := senders.Process.Kill(); err != nil {
+			b.Fatal(err)
 		}
 	}()
 	time.Sleep(15 * time.Second)
@@ -104,7 +89,7 @@ func benchWhisperReceiveTopics(b *testing.B, topicsCount int, topicStr []byte) {
 	time.Sleep(time.Second)
 
 	// topic to filter
-	topicS := whisperv5.BytesToTopic(topicStr)
+	topicS := whisperv5.BytesToTopic(topicBytes)
 	whisperv5.TopicS = topicS
 
 	topic := topicS.String()
@@ -138,14 +123,15 @@ func benchWhisperReceiveTopics(b *testing.B, topicsCount int, topicStr []byte) {
 	filterResult := &successfulResponce{}
 	json.Unmarshal([]byte(s), filterResult)
 
+	var stats whisperv5.Statistics
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		<-ticker.C
-		if i == 0 {
-			log.Printf("While recieving: envelops %v; messages %v\n", len(w.Envelopes()), len(w.Messages(filterResult.Result)))
-		}
 
-		log.Println("Currect STATS:", spew.Sdump(w.Stats()))
+		if i%60 == 0 {
+			stats = w.Stats()
+			log.Printf("Total envelops %v. Envelops with matched topic %v. Opened envelops %v.\n", *stats.MessagesTotal, *stats.TopicsMatched, *stats.EnvelopOpen)
+		}
 	}
 	b.StopTimer()
 
@@ -284,7 +270,7 @@ func sendMessages(backends []*api.StatusBackend, topicsCount int, b *testing.B) 
 		b.Fatal(err)
 	}
 
-	ticker := time.NewTicker(time.Millisecond * 10)
+	ticker := time.NewTicker(5 * time.Millisecond)
 	defer ticker.Stop()
 
 	nStr := os.Getenv(sendingCirclesName)

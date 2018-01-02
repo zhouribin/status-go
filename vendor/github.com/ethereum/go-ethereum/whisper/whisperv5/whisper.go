@@ -47,6 +47,23 @@ type Statistics struct {
 	TotalMessagesCleared *int64
 
 	TopicsMatched *int64
+	MessagesTotal *int64
+	EnvelopOpen *int64
+}
+
+var stats Statistics
+
+func init() {
+	stats = Statistics{
+		new(int64),
+		new(int64),
+		new(int64),
+		new(int64),
+		new(int64),
+		new(int64),
+		new(int64),
+		new(int64),
+	}
 }
 
 const (
@@ -78,8 +95,6 @@ type Whisper struct {
 
 	settings syncmap.Map // holds configuration settings that can be dynamically changed
 
-	stats   Statistics // Statistics of whisper node
-
 	mailServer         MailServer     // MailServer interface
 	deliveryServer     DeliveryServer // DeliveryServer interface
 	notificationServer NotificationServer
@@ -91,15 +106,6 @@ func New(cfg *Config) *Whisper {
 		cfg = &DefaultConfig
 	}
 
-	stats := Statistics{
-		new(int64),
-		new(int64),
-		new(int64),
-		new(int64),
-		new(int64),
-		new(int64),
-	}
-
 	whisper := &Whisper{
 		privateKeys:  make(map[string]*ecdsa.PrivateKey),
 		symKeys:      make(map[string][]byte),
@@ -109,8 +115,6 @@ func New(cfg *Config) *Whisper {
 		messageQueue: make(chan *Envelope, messageQueueLimit),
 		p2pMsgQueue:  make(chan *Envelope, messageQueueLimit),
 		quit:         make(chan struct{}),
-
-		stats: stats,
 	}
 
 	whisper.filters = NewFilters(whisper)
@@ -626,9 +630,9 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				return errors.New("invalid envelope")
 			}
 
+			atomic.AddInt64(stats.MessagesTotal, 1)
 			if TopicS.String() == envelope.Topic.String() {
-				atomic.AddInt64(wh.stats.TopicsMatched, 1)
-				//log.Warn("!!!", TopicS.String(), envelope.Topic.String())
+				atomic.AddInt64(stats.TopicsMatched, 1)
 			}
 
 			cached, err := wh.add(&envelope)
@@ -743,7 +747,7 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 	} else {
 		log.Trace("cached whisper envelope", "hash", envelope.Hash().Hex())
 
-		atomic.AddInt64(wh.stats.MemoryUsed, int64(envelope.size()))
+		atomic.AddInt64(stats.MemoryUsed, int64(envelope.size()))
 
 		wh.traceIncomingDelivery(false, message.QueuedStatus, nil, envelope, nil, nil)
 
@@ -878,7 +882,7 @@ func (w *Whisper) expire() {
 	w.poolMu.Lock()
 	defer w.poolMu.Unlock()
 
-	w.stats.reset()
+	stats.reset()
 	now := uint32(time.Now().Unix())
 	for expiry, hashSet := range w.expirations {
 		if expiry < now {
@@ -887,9 +891,9 @@ func (w *Whisper) expire() {
 				sz := w.envelopes[v.(common.Hash)].size()
 				delete(w.envelopes, v.(common.Hash))
 
-				atomic.AddInt64(w.stats.MessagesCleared, 1)
-				atomic.AddInt64(w.stats.MemoryCleared, int64(sz))
-				atomic.AddInt64(w.stats.MemoryUsed, int64(-sz))
+				atomic.AddInt64(stats.MessagesCleared, 1)
+				atomic.AddInt64(stats.MemoryCleared, int64(sz))
+				atomic.AddInt64(stats.MemoryUsed, int64(-sz))
 
 				return true
 			})
@@ -901,12 +905,14 @@ func (w *Whisper) expire() {
 
 // Stats returns the whisper node statistics.
 func (w *Whisper) Stats() Statistics {
-	messagesCleared := atomic.LoadInt64(w.stats.MessagesCleared)
-	memoryCleared := atomic.LoadInt64(w.stats.MemoryCleared)
-	memoryUsed := atomic.LoadInt64(w.stats.MemoryUsed)
-	cycles := atomic.LoadInt64(w.stats.Cycles)
-	totalMessagesCleared := atomic.LoadInt64(w.stats.TotalMessagesCleared)
-	topicsMatched := atomic.LoadInt64(w.stats.TopicsMatched)
+	messagesCleared := atomic.LoadInt64(stats.MessagesCleared)
+	memoryCleared := atomic.LoadInt64(stats.MemoryCleared)
+	memoryUsed := atomic.LoadInt64(stats.MemoryUsed)
+	cycles := atomic.LoadInt64(stats.Cycles)
+	totalMessagesCleared := atomic.LoadInt64(stats.TotalMessagesCleared)
+	topicsMatched := atomic.LoadInt64(stats.TopicsMatched)
+	messagesTotal := atomic.LoadInt64(stats.MessagesTotal)
+	envelopOpen := atomic.LoadInt64(stats.EnvelopOpen)
 
 	return Statistics{
 		&messagesCleared,
@@ -915,6 +921,8 @@ func (w *Whisper) Stats() Statistics {
 		&cycles,
 		&totalMessagesCleared,
 		&topicsMatched,
+		&messagesTotal,
+		&envelopOpen,
 	}
 }
 

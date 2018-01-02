@@ -25,6 +25,7 @@ import (
 	gmath "math"
 	"math/big"
 	"time"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/math"
@@ -218,6 +219,7 @@ func (e *Envelope) OpenSymmetric(key []byte) (msg *ReceivedMessage, err error) {
 
 // Open tries to decrypt an envelope, and populates the message fields in case of success.
 func (e *Envelope) Open(watcher *Filter) (msg *ReceivedMessage) {
+	atomic.AddInt64(stats.EnvelopOpen, 1)
 	if e.isAsymmetric() {
 		msg, _ = e.OpenAsymmetric(watcher.KeyAsym)
 		if msg != nil {

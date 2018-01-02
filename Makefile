@@ -150,5 +150,5 @@ bench-clean:
 	rm -f ./e2e/whisper/enode.txt
 
 bench:
-	go test -v ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperReceiveSingleTopicMatch -benchtime=100s -timeout=600s -cpuprofile cpu_bench_single_match_receive.prof > single.txt &2>1
-	go test -v ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperReceiveManyTopicsMatch -benchtime=100s -timeout=600s -cpuprofile cpu_bench_many_match_receive.prof > many.txt &2>1
+	go test -v ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperReceiveSingleTopicMatch -benchtime=100s -timeout=600s -cpuprofile cpu_bench_single_match_receive.prof > single.txt 2>&1
+	go test -v ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperReceiveManyTopicsMatch -benchtime=100s -timeout=600s -cpuprofile cpu_bench_many_match_receive.prof > many.txt 2>&1
