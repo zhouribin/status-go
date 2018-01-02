@@ -2,7 +2,6 @@ package whisper
 
 import (
 	"bytes"
-	"encoding/json"
 	"io/ioutil"
 	"log"
 	"os"
@@ -18,7 +17,6 @@ import (
 	"github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"github.com/status-im/status-go/e2e"
 	"github.com/status-im/status-go/geth/api"
-	"github.com/status-im/status-go/geth/rpc"
 	. "github.com/status-im/status-go/testing"
 )
 
@@ -92,7 +90,6 @@ func benchWhisperReceiveTopics(b *testing.B, topicsCount int, topicBytes []byte)
 	topicS := whisperv5.BytesToTopic(topicBytes)
 	whisperv5.TopicS = topicS
 
-	topic := topicS.String()
 	w, err := receiver.NodeManager().WhisperService()
 	if err != nil {
 		b.Fatal(err)
@@ -108,20 +105,23 @@ func benchWhisperReceiveTopics(b *testing.B, topicsCount int, topicBytes []byte)
 		b.Fatal(err)
 	}
 
-	pubkey := hexutil.Bytes(crypto.FromECDSAPub(&pk.PublicKey)).String()
-
 	n, _ := receiver.NodeManager().Node()
 	b.Log(n.Server().PeersInfo())
 
-	log.Println("Before recieving:", len(w.Envelopes()))
-
 	ticker := time.NewTicker(1 * time.Second)
 	defer ticker.Stop()
-	s := createPrivateChatMessageFilter(receiver.NodeManager().RPCClient(), pubkey, topic)
-	b.Log(s)
 
-	filterResult := &successfulResponce{}
-	json.Unmarshal([]byte(s), filterResult)
+	f := &whisperv5.Filter{
+		KeyAsym:  pk,
+		Topics:   [][]byte{topicS[:]},
+		AllowP2P: true,
+	}
+
+	filterID, err := w.Subscribe(f)
+	if err != nil {
+		b.Fatalf("Failed to install filter: %s", err)
+	}
+	defer w.Unsubscribe(filterID)
 
 	var stats whisperv5.Statistics
 	b.ResetTimer()
@@ -134,8 +134,6 @@ func benchWhisperReceiveTopics(b *testing.B, topicsCount int, topicBytes []byte)
 		}
 	}
 	b.StopTimer()
-
-	log.Println("After recieving:", len(w.Envelopes()))
 }
 
 func BenchmarkWhisperSendMessagesOneTopic(b *testing.B) {
@@ -352,18 +350,6 @@ func startMailboxBackend() (*api.StatusBackend, func()) {
 		<-backendStopped
 		os.RemoveAll(datadir)
 	}
-}
-
-func createPrivateChatMessageFilter(rpcCli *rpc.Client, privateKeyID string, topic string) string {
-	resp := rpcCli.CallRaw(`{
-			"jsonrpc": "2.0",
-			"method": "shh_newMessageFilter", "params": [
-				{"privateKeyID": "` + privateKeyID + `", "topics": [ "` + topic + `"], "allowP2P":true}
-			],
-			"id": 1
-		}`)
-
-	return resp
 }
 
 type topic struct {
