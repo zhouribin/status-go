@@ -22,6 +22,7 @@ import (
 	"errors"
 	"fmt"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -102,9 +103,8 @@ type Info struct {
 
 // Info returns diagnostic information about the whisper node.
 func (api *PublicWhisperAPI) Info(ctx context.Context) Info {
-	stats := api.w.Stats()
 	return Info{
-		Memory:         stats.memoryUsed,
+		Memory:         int(atomic.LoadInt64(api.w.Stats().MemoryUsed)),
 		Messages:       len(api.w.messageQueue) + len(api.w.p2pMsgQueue),
 		MinPow:         api.w.MinPow(),
 		MaxMessageSize: api.w.MaxMessageSize(),

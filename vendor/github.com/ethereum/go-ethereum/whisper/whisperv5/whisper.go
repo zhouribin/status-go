@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -35,15 +36,17 @@ import (
 	"github.com/syndtr/goleveldb/leveldb/errors"
 	"golang.org/x/crypto/pbkdf2"
 	"golang.org/x/sync/syncmap"
-	set "gopkg.in/fatih/set.v0"
+	"gopkg.in/fatih/set.v0"
 )
 
 type Statistics struct {
-	messagesCleared      int
-	memoryCleared        int
-	memoryUsed           int
-	cycles               int
-	totalMessagesCleared int
+	MessagesCleared      *int64
+	MemoryCleared        *int64
+	MemoryUsed           *int64
+	Cycles               *int64
+	TotalMessagesCleared *int64
+
+	TopicsMatched *int64
 }
 
 const (
@@ -75,7 +78,6 @@ type Whisper struct {
 
 	settings syncmap.Map // holds configuration settings that can be dynamically changed
 
-	statsMu sync.Mutex // guard stats
 	stats   Statistics // Statistics of whisper node
 
 	mailServer         MailServer     // MailServer interface
@@ -89,6 +91,15 @@ func New(cfg *Config) *Whisper {
 		cfg = &DefaultConfig
 	}
 
+	stats := Statistics{
+		new(int64),
+		new(int64),
+		new(int64),
+		new(int64),
+		new(int64),
+		new(int64),
+	}
+
 	whisper := &Whisper{
 		privateKeys:  make(map[string]*ecdsa.PrivateKey),
 		symKeys:      make(map[string][]byte),
@@ -98,6 +109,8 @@ func New(cfg *Config) *Whisper {
 		messageQueue: make(chan *Envelope, messageQueueLimit),
 		p2pMsgQueue:  make(chan *Envelope, messageQueueLimit),
 		quit:         make(chan struct{}),
+
+		stats: stats,
 	}
 
 	whisper.filters = NewFilters(whisper)
@@ -585,8 +598,7 @@ func (wh *Whisper) HandlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return wh.runMessageLoop(whisperPeer, rw)
 }
 
-var t int
-var topicS = BytesToTopic([]byte("test topic"))
+var TopicS TopicType
 
 // runMessageLoop reads and processes inbound messages directly to merge into client-global state.
 func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
@@ -613,9 +625,10 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				log.Warn("failed to decode envelope, peer will be disconnected", "peer", p.peer.ID(), "err", err)
 				return errors.New("invalid envelope")
 			}
-			if topicS.String()==envelope.Topic.String() {
-				t++
-				fmt.Println("T:", t, envelope.Topic.String())
+
+			if TopicS.String() == envelope.Topic.String() {
+				atomic.AddInt64(wh.stats.TopicsMatched, 1)
+				//log.Warn("!!!", TopicS.String(), envelope.Topic.String())
 			}
 
 			cached, err := wh.add(&envelope)
@@ -729,9 +742,8 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 		wh.traceIncomingDelivery(false, message.ResentStatus, nil, envelope, nil, nil)
 	} else {
 		log.Trace("cached whisper envelope", "hash", envelope.Hash().Hex())
-		wh.statsMu.Lock()
-		wh.stats.memoryUsed += envelope.size()
-		wh.statsMu.Unlock()
+
+		atomic.AddInt64(wh.stats.MemoryUsed, int64(envelope.size()))
 
 		wh.traceIncomingDelivery(false, message.QueuedStatus, nil, envelope, nil, nil)
 
@@ -866,8 +878,6 @@ func (w *Whisper) expire() {
 	w.poolMu.Lock()
 	defer w.poolMu.Unlock()
 
-	w.statsMu.Lock()
-	defer w.statsMu.Unlock()
 	w.stats.reset()
 	now := uint32(time.Now().Unix())
 	for expiry, hashSet := range w.expirations {
@@ -876,9 +886,11 @@ func (w *Whisper) expire() {
 			hashSet.Each(func(v interface{}) bool {
 				sz := w.envelopes[v.(common.Hash)].size()
 				delete(w.envelopes, v.(common.Hash))
-				w.stats.messagesCleared++
-				w.stats.memoryCleared += sz
-				w.stats.memoryUsed -= sz
+
+				atomic.AddInt64(w.stats.MessagesCleared, 1)
+				atomic.AddInt64(w.stats.MemoryCleared, int64(sz))
+				atomic.AddInt64(w.stats.MemoryUsed, int64(-sz))
+
 				return true
 			})
 			w.expirations[expiry].Clear()
@@ -889,10 +901,21 @@ func (w *Whisper) expire() {
 
 // Stats returns the whisper node statistics.
 func (w *Whisper) Stats() Statistics {
-	w.statsMu.Lock()
-	defer w.statsMu.Unlock()
+	messagesCleared := atomic.LoadInt64(w.stats.MessagesCleared)
+	memoryCleared := atomic.LoadInt64(w.stats.MemoryCleared)
+	memoryUsed := atomic.LoadInt64(w.stats.MemoryUsed)
+	cycles := atomic.LoadInt64(w.stats.Cycles)
+	totalMessagesCleared := atomic.LoadInt64(w.stats.TotalMessagesCleared)
+	topicsMatched := atomic.LoadInt64(w.stats.TopicsMatched)
 
-	return w.stats
+	return Statistics{
+		&messagesCleared,
+		&memoryCleared,
+		&memoryUsed,
+		&cycles,
+		&totalMessagesCleared,
+		&topicsMatched,
+	}
 }
 
 // Envelopes retrieves all the messages currently pooled by the node.
@@ -936,11 +959,12 @@ func (w *Whisper) isEnvelopeCached(hash common.Hash) bool {
 
 // reset resets the node's statistics after each expiry cycle.
 func (s *Statistics) reset() {
-	s.cycles++
-	s.totalMessagesCleared += s.messagesCleared
+	atomic.AddInt64(s.Cycles, 1)
 
-	s.memoryCleared = 0
-	s.messagesCleared = 0
+	atomic.AddInt64(s.TotalMessagesCleared, atomic.LoadInt64(s.MessagesCleared))
+
+	atomic.StoreInt64(s.MemoryCleared, 0)
+	atomic.StoreInt64(s.MessagesCleared, 0)
 }
 
 // ValidatePublicKey checks the format of the given public key.

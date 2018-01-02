@@ -2,6 +2,7 @@ package whisper
 
 import (
 	"bytes"
+	"encoding/json"
 	"io/ioutil"
 	"log"
 	"os"
@@ -11,9 +12,10 @@ import (
 	"testing"
 	"time"
 
-	"encoding/json"
+	"github.com/davecgh/go-spew/spew"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
+	"github.com/ethereum/go-ethereum/crypto/sha3"
 	"github.com/ethereum/go-ethereum/whisper/whisperv5"
 	"github.com/status-im/status-go/e2e"
 	"github.com/status-im/status-go/geth/api"
@@ -27,24 +29,22 @@ const (
 )
 
 func BenchmarkWhisperReceiveSingleTopicNoMatch(b *testing.B) {
-	benchWhisperReceiveTopics(b, 1, "test unique topic")
+	benchWhisperReceiveTopics(b, 1, []byte("test unique topic"))
 }
 
 func BenchmarkWhisperReceiveManyTopicsNoMatch(b *testing.B) {
-	benchWhisperReceiveTopics(b, 100, "test unique topic")
+	benchWhisperReceiveTopics(b, 100, []byte("test unique topic"))
 }
 
 func BenchmarkWhisperReceiveSingleTopicMatch(b *testing.B) {
-	topic := strconv.Itoa(0) + " test"
-	benchWhisperReceiveTopics(b, 1, topic)
+	benchWhisperReceiveTopics(b, 1, getTopic(0))
 }
 
 func BenchmarkWhisperReceiveManyTopicsMatch(b *testing.B) {
-	topic := strconv.Itoa(0) + " test"
-	benchWhisperReceiveTopics(b, 100, topic)
+	benchWhisperReceiveTopics(b, 100, getTopic(0))
 }
 
-func benchWhisperReceiveTopics(b *testing.B, topicsCount int, topicStr string) {
+func benchWhisperReceiveTopics(b *testing.B, topicsCount int, topicStr []byte) {
 	defer func() {
 		log.Println("!!!!!!!! DONE benchWhisperReceiveTopics\n\n")
 	}()
@@ -53,7 +53,7 @@ func benchWhisperReceiveTopics(b *testing.B, topicsCount int, topicStr string) {
 	defer stop()
 
 	os.Setenv(uniqueTopicsName, strconv.Itoa(topicsCount))
-	os.Setenv(sendingCirclesName, strconv.Itoa(30000))
+	os.Setenv(sendingCirclesName, strconv.Itoa(30000000))
 	defer os.Unsetenv(uniqueTopicsName)
 	defer os.Unsetenv(sendingCirclesName)
 
@@ -75,12 +75,22 @@ func benchWhisperReceiveTopics(b *testing.B, topicsCount int, topicStr string) {
 		b.Fatal(err)
 	}
 	defer func() {
-		if err := senders.Process.Kill(); err != nil {
-			b.Fatal(err)
-		}
+		chErr := make(chan error, 1)
+		timeout := time.NewTimer(5 * time.Second)
 
-		if err := senders.Wait(); err != nil {
-			b.Fatal(err)
+		go func() {
+			chErr <- senders.Wait()
+		}()
+
+		select {
+		case err = <-chErr:
+			if err != nil {
+				b.Fatal(err)
+			}
+		case <-timeout.C:
+			if err := senders.Process.Kill(); err != nil {
+				b.Fatal(err)
+			}
 		}
 	}()
 	time.Sleep(15 * time.Second)
@@ -93,7 +103,10 @@ func benchWhisperReceiveTopics(b *testing.B, topicsCount int, topicStr string) {
 	}
 	time.Sleep(time.Second)
 
-	topicS := whisperv5.BytesToTopic([]byte(topicStr))
+	// topic to filter
+	topicS := whisperv5.BytesToTopic(topicStr)
+	whisperv5.TopicS = topicS
+
 	topic := topicS.String()
 	w, err := receiver.NodeManager().WhisperService()
 	if err != nil {
@@ -131,6 +144,8 @@ func benchWhisperReceiveTopics(b *testing.B, topicsCount int, topicStr string) {
 		if i == 0 {
 			log.Printf("While recieving: envelops %v; messages %v\n", len(w.Envelopes()), len(w.Messages(filterResult.Result)))
 		}
+
+		log.Println("Currect STATS:", spew.Sdump(w.Stats()))
 	}
 	b.StopTimer()
 
@@ -240,7 +255,7 @@ func manyTopics(n int, b *api.StatusBackend) (newMessageData, error) {
 	var topics []topic
 	for i := 0; i < n; i++ {
 		tp := topic{}
-		tp.topic = whisperv5.BytesToTopic([]byte(strconv.Itoa(i) + " test"))
+		tp.topic = whisperv5.BytesToTopic(getTopic(i))
 		tp.str = tp.topic.String()
 
 		topics = append(topics, tp)
@@ -255,6 +270,12 @@ func manyTopics(n int, b *api.StatusBackend) (newMessageData, error) {
 			payload,
 		}
 	}, nil
+}
+
+func getTopic(i int) []byte {
+	h := sha3.NewKeccak256()
+	h.Write([]byte(strconv.Itoa(i) + " test"))
+	return h.Sum(nil)[:4]
 }
 
 func sendMessages(backends []*api.StatusBackend, topicsCount int, b *testing.B) {

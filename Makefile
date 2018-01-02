@@ -136,15 +136,19 @@ deep-clean: clean
 
 
 bench-one-topic:
-	go test ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperSendMessagesOneTopic -benchtime=300s -timeout=6000s -cpuprofile cpu_bench_single_send.prof
-	go test ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperReceiveSingleTopicNoMatch -benchtime=300s -timeout=6000s -cpuprofile cpu_bench_single_no_match_receive.prof
-	go test ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperReceiveSingleTopicMatch -benchtime=300s -timeout=6000s -cpuprofile cpu_bench_single_match_receive.prof
+	go test -v ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperSendMessagesOneTopic -benchtime=100s -timeout=600s -cpuprofile cpu_bench_single_send.prof
+	go test -v ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperReceiveSingleTopicNoMatch -benchtime=100s -timeout=600s -cpuprofile cpu_bench_single_no_match_receive.prof
+	go test -v ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperReceiveSingleTopicMatch -benchtime=100s -timeout=600s -cpuprofile cpu_bench_single_match_receive.prof
 
 bench-many-topics:
-	go test ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperSendMessagesWithDifferentTopics -benchtime=300s -timeout=6000s -cpuprofile cpu_bench_many_send.prof
-	go test ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperReceiveManyTopicsNoMatch -benchtime=300s -timeout=6000s -cpuprofile cpu_bench_many_no_match_receive.prof
-	go test ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperReceiveManyTopicsMatch -benchtime=300s -timeout=6000s -cpuprofile cpu_bench_many_match_receive.prof
+	go test -v ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperSendMessagesWithDifferentTopics -benchtime=100s -timeout=600s -cpuprofile cpu_bench_many_send.prof
+	go test -v ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperReceiveManyTopicsNoMatch -benchtime=100s -timeout=600s -cpuprofile cpu_bench_many_no_match_receive.prof
+	go test -v ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperReceiveManyTopicsMatch -benchtime=100s -timeout=600s -cpuprofile cpu_bench_many_match_receive.prof
 
 bench-clean:
-	rm *.prof
-	rm ./e2e/whisper/enode.txt
+	rm -f *.prof
+	rm -f ./e2e/whisper/enode.txt
+
+bench:
+	go test -v ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperReceiveSingleTopicMatch -benchtime=100s -timeout=600s -cpuprofile cpu_bench_single_match_receive.prof > single.txt &2>1
+	go test -v ./e2e/whisper/whisper_send_message_test.go -bench BenchmarkWhisperReceiveManyTopicsMatch -benchtime=100s -timeout=600s -cpuprofile cpu_bench_many_match_receive.prof > many.txt &2>1
