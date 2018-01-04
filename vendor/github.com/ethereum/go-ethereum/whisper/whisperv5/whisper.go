@@ -585,7 +585,8 @@ func (wh *Whisper) HandlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return wh.runMessageLoop(whisperPeer, rw)
 }
 
-var t int
+var DuplicatedEnv int
+var AllEnv int
 var topicS = BytesToTopic([]byte("test topic"))
 
 // runMessageLoop reads and processes inbound messages directly to merge into client-global state.
@@ -612,10 +613,6 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 			if err := packet.Decode(&envelope); err != nil {
 				log.Warn("failed to decode envelope, peer will be disconnected", "peer", p.peer.ID(), "err", err)
 				return errors.New("invalid envelope")
-			}
-			if topicS.String()==envelope.Topic.String() {
-				t++
-				fmt.Println("T:", t, envelope.Topic.String())
 			}
 
 			cached, err := wh.add(&envelope)
@@ -734,6 +731,14 @@ func (wh *Whisper) add(envelope *Envelope) (bool, error) {
 		wh.statsMu.Unlock()
 
 		wh.traceIncomingDelivery(false, message.QueuedStatus, nil, envelope, nil, nil)
+
+		AllEnv++
+		if topicS.String()==envelope.Topic.String() {
+			DuplicatedEnv++
+			if DuplicatedEnv%100==0 {
+				fmt.Println("T:", DuplicatedEnv, envelope.Topic.String())
+			}
+		}
 
 		wh.postEvent(envelope, false) // notify the local node about the new message
 		if wh.mailServer != nil {
