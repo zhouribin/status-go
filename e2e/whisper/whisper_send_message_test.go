@@ -263,6 +263,27 @@ func TestWhisperSendMessagesWithDifferentTopics(t *testing.T) {
 	}
 }
 
+
+func TestTwoLESNodes(t *testing.T) {
+	first, stop := startBackend("first")
+	defer stop()
+
+	second, stop := startBackend("second")
+	defer stop()
+
+	n1,err:=first.NodeManager().Node()
+	if err!=nil {
+		t.Fatal(err)
+	}
+
+	err=second.NodeManager().AddPeer(n1.Server().NodeInfo().Enode)
+	if err!=nil {
+		t.Fatal(err)
+	}
+	time.Sleep(time.Second*5)
+	t.Log(n1.Server().Peers())
+}
+
 func startBackend(name string) (*api.StatusBackend, func()) {
 	datadir := "../../.ethereumtest/whisperpref/" + name
 	backend := api.NewStatusBackend()

@@ -358,7 +358,6 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 	var rGenesis, rHash common.Hash
 	var rVersion, rNetwork, rNum uint64
 	var rTd *big.Int
-
 	if err := recv.get("protocolVersion", &rVersion); err != nil {
 		return err
 	}
@@ -395,6 +394,7 @@ func (p *peer) Handshake(td *big.Int, head common.Hash, headNum uint64, genesis 
 		p.fcClient = flowcontrol.NewClientNode(server.fcManager, server.defParams)
 	} else {
 		if recv.get("serveChainSince", nil) != nil {
+			fmt.Println("----------------------------Error at handshake--------------------------")
 			return errResp(ErrUselessPeer, "peer cannot serve chain")
 		}
 		if recv.get("serveStateSince", nil) != nil {
