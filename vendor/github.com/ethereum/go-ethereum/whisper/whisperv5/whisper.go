@@ -124,6 +124,11 @@ func New(cfg *Config) *Whisper {
 	return whisper
 }
 
+func (w *Whisper) Filters() *Filters {
+	return w.filters
+}
+
+
 func (w *Whisper) MinPow() float64 {
 	val, _ := w.settings.Load(minPowIdx)
 	return val.(float64)

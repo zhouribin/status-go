@@ -54,6 +54,16 @@ func NewFilters(w *Whisper) *Filters {
 	}
 }
 
+func (fs *Filters) Topics() map[string][][]byte {
+	m:=make(map[string][][]byte)
+	fs.mutex.RLock()
+	defer fs.mutex.RUnlock()
+	for i:=range fs.watchers {
+		m[i]=fs.watchers[i].Topics
+	}
+	return m
+}
+
 func (fs *Filters) Install(watcher *Filter) (string, error) {
 	if watcher.Messages == nil {
 		watcher.Messages = make(map[common.Hash]*ReceivedMessage)
@@ -95,6 +105,8 @@ func (fs *Filters) Get(id string) *Filter {
 	return fs.watchers[id]
 }
 
+var Opened int
+
 func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 	var msg *ReceivedMessage
 
@@ -115,6 +127,7 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 		} else {
 			match = watcher.MatchEnvelope(env)
 			if match {
+				Opened++
 				msg = env.Open(watcher)
 				if msg == nil {
 					err := errors.New("Envelope failed to be opened")

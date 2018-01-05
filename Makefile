@@ -139,6 +139,9 @@ bench-one-topic:
 	go test ./e2e/whisper/whisper_send_message_test.go -run TestWhisperSendMessagesOneTopic &
 	go test -v ./e2e/whisper/whisper_send_message_test.go -run TestWhisperReceive -cpuprofile cpu_bench_one.prof
 
+bench-many-topics-http:
+	go test -v ./e2e/whisper/whisper_send_message_test.go -run TestWhisperReceive_FilterOverHttp -cpuprofile cpu_bench_many_http.prof
+
 bench-many-topics:
 	go test ./e2e/whisper/whisper_send_message_test.go -run TestWhisperSendMessagesWithDifferentTopics &
 	go test -v ./e2e/whisper/whisper_send_message_test.go -run TestWhisperReceive -cpuprofile cpu_bench_many.prof

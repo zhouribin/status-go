@@ -16,6 +16,7 @@ import (
 	"github.com/status-im/status-go/e2e"
 	"github.com/status-im/status-go/geth/api"
 	. "github.com/status-im/status-go/testing"
+	"github.com/status-im/status-go/geth/rpc"
 )
 
 const DURATION = 300 * time.Second
@@ -82,7 +83,44 @@ func TestWhisperReceive(t *testing.T) {
 	t.Log(n.Server().PeersInfo())
 	time.Sleep(DURATION)
 	t.Log("env with one topic: ", whisperv5.DuplicatedEnv)
-	t.Log("all envs: ", whisperv5.AllEnv)
+	t.Log("opened envelopes: ", whisperv5.Opened)
+	t.Log("all envelopes: ", whisperv5.AllEnv)
+	t.Log("rps: ", whisperv5.AllEnv/int(DURATION.Seconds()))
+}
+
+func TestWhisperReceive_FilterOverHttp(t *testing.T) {
+	receiver, stop := startBackend("receiver")
+	defer stop()
+
+	time.Sleep(time.Second)
+	topicS := whisperv5.BytesToTopic([]byte("test topic"))
+	topic:=topicS.String()
+	w, err := receiver.NodeManager().WhisperService()
+	if err != nil {
+		t.Fatal(err)
+	}
+	keyID, err := w.NewKeyPair()
+	if err != nil {
+		t.Fatal(err)
+	}
+	pk, err := w.GetPrivateKey(keyID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pubkey := hexutil.Bytes(crypto.FromECDSAPub(&pk.PublicKey)).String()
+	filterID:=createPrivateChatMessageFilter(receiver.NodeManager().RPCClient(), pubkey, topic)
+	t.Log(filterID)
+
+	n, _ := receiver.NodeManager().Node()
+	t.Log(n.Server().PeersInfo())
+	topics:=w.Filters().Topics()
+	for i:=range topics {
+		t.Log("topics:", i, topics[i])
+	}
+	time.Sleep(time.Second)
+	t.Log("env with one topic: ", whisperv5.DuplicatedEnv)
+	t.Log("opened envelopes: ", whisperv5.Opened)
+	t.Log("all envelopes: ", whisperv5.AllEnv)
 	t.Log("rps: ", whisperv5.AllEnv/int(DURATION.Seconds()))
 }
 
@@ -279,4 +317,16 @@ func startMailboxBackend() (*api.StatusBackend, func()) {
 func getEnodeFilePath() string {
 	_, f, _, _ := runtime.Caller(0)
 	return path.Dir(f) + "/enode.txt"
+}
+
+
+func createPrivateChatMessageFilter(rpcCli *rpc.Client, privateKeyID string, topic string) string {
+	resp := rpcCli.CallRaw(`{
+			"jsonrpc": "2.0",
+			"method": "shh_newMessageFilter", "params": [
+				{"privateKeyID": "` + privateKeyID + `", "topics": [ "` + topic + `"], "allowP2P":true}
+			],
+			"id": 1
+		}`)
+	return resp
 }
