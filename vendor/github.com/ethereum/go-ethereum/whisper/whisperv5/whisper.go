@@ -79,7 +79,8 @@ type Whisper struct {
 	stats   Statistics // Statistics of whisper node
 
 	mailServer         MailServer     // MailServer interface
-	deliveryServer     DeliveryServer // DeliveryServer interface
+	deliveryServer     DeliveryServer // DeliveryServer interface DEPRECATED(adam)
+	envelopeTracer     EnvelopeTracer // Service collecting envelopes metadata
 	notificationServer NotificationServer
 }
 
@@ -167,6 +168,10 @@ func (w *Whisper) RegisterDeliveryServer(server DeliveryServer) {
 // RegisterNotificationServer registers notification server with Whisper
 func (w *Whisper) RegisterNotificationServer(server NotificationServer) {
 	w.notificationServer = server
+}
+
+func (w *Whisper) RegisterEnvelopeTracer(tracer EnvelopeTracer) {
+	w.envelopeTracer = tracer
 }
 
 // Protocols returns the whisper sub-protocols ran by this particular client.
@@ -610,6 +615,9 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				log.Warn("failed to decode envelope, peer will be disconnected", "peer", p.peer.ID(), "err", err)
 				return errors.New("invalid envelope")
 			}
+
+			wh.traceEnvelope(&envelope, !wh.isEnvelopeCached(envelope.Hash()), peerSource, p)
+
 			cached, err := wh.add(&envelope)
 			if err != nil {
 				log.Warn("bad envelope received, peer will be disconnected", "peer", p.peer.ID(), "err", err)
@@ -632,6 +640,8 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				}
 
 				wh.traceIncomingDelivery(true, message.SentStatus, nil, &envelope, nil, nil)
+				wh.traceEnvelope(&envelope, false, p2pSource, p)
+
 				wh.postEvent(&envelope, true)
 			}
 		case p2pRequestCode:
@@ -773,6 +783,22 @@ func (w *Whisper) traceDelivery(isP2P bool, dir message.Direction, status messag
 		Envelope:  env,
 		Direction: dir,
 		Timestamp: time.Now(),
+	})
+}
+
+// traceEnvelope collects basic metadata about an envelope and sender peer.
+func (w *Whisper) traceEnvelope(envelope *Envelope, isNew bool, source envelopeSource, peer *Peer) {
+	if w.envelopeTracer == nil {
+		return
+	}
+
+	w.envelopeTracer.Trace(&EnvelopeMeta{
+		Hash:   envelope.Hash().String(),
+		Topic:  BytesToTopic(envelope.Topic[:]),
+		Size:   uint32(envelope.size()),
+		Source: source,
+		IsNew:  isNew,
+		Peer:   peer.peer.Info().ID,
 	})
 }
 
