@@ -29,7 +29,7 @@ import (
 )
 
 type Filter struct {
-	Src        *ecdsa.PublicKey  // Sender of the message
+	Src        *ecdsa.PublicKey  // Sender of the message:
 	KeyAsym    *ecdsa.PrivateKey // Private Key of recipient
 	KeySym     []byte            // Key associated with the Topic
 	Topics     [][]byte          // Topics to filter messages with
@@ -115,7 +115,7 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 		} else {
 			match = watcher.MatchEnvelope(env)
 			if match {
-				log.Info("opened envelop:", "", env.Topic.String(), env)
+				log.Info("opened envelop:", "topic", env.Topic.String())
 				msg = env.Open(watcher)
 				if msg == nil {
 					err := errors.New("Envelope failed to be opened")
@@ -130,10 +130,10 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 		}
 
 		if match && msg != nil {
-			log.Trace("processing message: decrypted", "hash", env.Hash().Hex())
+			log.Trace("processing message: decrypted", "hash", env.Hash().Hex(), "topic", env.Topic.String())
 			fs.whisper.traceIncomingDelivery(p2pMessage, message.DeliveredStatus, nil, env, msg, nil)
 			if watcher.Src == nil || IsPubKeyEqual(msg.Src, watcher.Src) {
-				log.Info("triggered envelop:", "", env.Topic.String(), env)
+				log.Info("triggered envelop:", "topic", env.Topic.String())
 				watcher.Trigger(msg)
 			}
 		}
@@ -142,7 +142,7 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 
 func (f *Filter) processEnvelope(env *Envelope) *ReceivedMessage {
 	if f.MatchEnvelope(env) {
-		log.Info("processed envelop:", "", env.Topic.String(), env)
+		log.Info("processed envelop:", "topic", env.Topic.String(), env)
 		msg := env.Open(f)
 		if msg != nil {
 			return msg
