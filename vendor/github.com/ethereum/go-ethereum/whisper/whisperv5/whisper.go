@@ -830,6 +830,7 @@ func (w *Whisper) processQueue() {
 
 		case e = <-w.p2pMsgQueue:
 			w.traceIncomingDelivery(true, message.ProcessingStatus, nil, e, nil, nil)
+			log.Info("p2p received envelop:", "", e.Topic.String(), e)
 			w.filters.NotifyWatchers(e, true)
 		}
 	}
