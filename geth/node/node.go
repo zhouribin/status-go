@@ -93,7 +93,7 @@ func defaultEmbeddedNodeConfig(config *params.NodeConfig) *node.Config {
 		Version:           config.Version,
 		P2P: p2p.Config{
 			NoDiscovery:      true,
-			DiscoveryV5:      false,
+			DiscoveryV5:      true,
 			DiscoveryV5Addr:  ":0",
 			BootstrapNodes:   nil,
 			BootstrapNodesV5: nil,
@@ -117,6 +117,7 @@ func defaultEmbeddedNodeConfig(config *params.NodeConfig) *node.Config {
 	}
 
 	if config.BootClusterConfig.Enabled {
+		nc.P2P.NoDiscovery = false
 		nc.P2P.BootstrapNodes = makeBootstrapNodes(config.BootClusterConfig.BootNodes)
 	}
 

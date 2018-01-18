@@ -1,16 +1,22 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/status-im/status-go/cmd/statusd/debug"
 	"github.com/status-im/status-go/geth/api"
+	"github.com/status-im/status-go/geth/common"
 	"github.com/status-im/status-go/geth/params"
+	"github.com/status-im/status-go/metrics"
+	nodeMetrics "github.com/status-im/status-go/metrics/node"
 )
 
 var (
@@ -38,6 +44,10 @@ var (
 	listenAddr = flag.String("listenaddr", ":30303", "IP address and port of this node (e.g. 127.0.0.1:30303)")
 	standalone = flag.Bool("standalone", true, "Don't actively connect to peers, wait for incoming connections")
 	bootnodes  = flag.String("bootnodes", "", "A list of bootnodes separated by comma")
+
+	// stats
+	statsEnabled = flag.Bool("stats", false, "Expose node stats via /debug/vars expvar endpoint or Prometheus (log by default)")
+	statsAddr    = flag.String("stats.addr", ":8080", "HTTP address with /debug/vars endpoint")
 
 	// shh stuff
 	identityFile = flag.String("shh.identityfile", "", "Protocol identity file (private key used for asymmetric encryption)")
@@ -69,6 +79,7 @@ func main() {
 	}
 
 	backend := api.NewStatusBackend()
+	interruptCh := haltOnInterruptSignal(backend.NodeManager())
 	started, err := backend.StartNode(config)
 	if err != nil {
 		log.Fatalf("Node start failed: %v", err)
@@ -87,6 +98,11 @@ func main() {
 		}
 	}
 
+	// Run stats server.
+	if *statsEnabled {
+		go startCollectingStats(backend.NodeManager(), interruptCh)
+	}
+
 	// wait till node has been stopped
 	node, err := backend.NodeManager().Node()
 	if err != nil {
@@ -102,6 +118,35 @@ func startDebug(backend *api.StatusBackend) error {
 	statusAPI := api.NewStatusAPIWithBackend(backend)
 	_, err := debug.New(statusAPI, *cliPort)
 	return err
+}
+
+// startCollectingStats collects various stats about the node and other protocols like Whisper.
+func startCollectingStats(nodeManager common.NodeManager, interruptCh <-chan struct{}) {
+	log.Printf("Starting stats on %v", *statsAddr)
+
+	node, err := nodeManager.Node()
+	if err != nil {
+		log.Printf("Failed to run metrics because could not get node: %v", err)
+		return
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	go func() {
+		if err := nodeMetrics.SubscribeServerEvents(ctx, node); err != nil {
+			log.Printf("Failed to subscribe server events: %v", err)
+		}
+	}()
+
+	server := metrics.NewMetricsServer(*statsAddr)
+	go func() {
+		log.Printf("Metrics server failed: %v", server.ListenAndServe())
+	}()
+
+	select {
+	case <-interruptCh:
+		cancel()
+		server.Shutdown(context.TODO())
+	}
 }
 
 // makeNodeConfig parses incoming CLI options and returns node configuration object
@@ -193,4 +238,34 @@ Options:
 `
 	fmt.Fprintf(os.Stderr, usage) // nolint: gas
 	flag.PrintDefaults()
+}
+
+func haltOnInterruptSignal(nodeManager common.NodeManager) <-chan struct{} {
+	interruptCh := make(chan struct{})
+
+	go func() {
+		signalCh := make(chan os.Signal, 1)
+		signal.Notify(signalCh, os.Interrupt)
+		defer signal.Stop(signalCh)
+		<-signalCh
+
+		log.Println("Got interrupt, shutting down...")
+
+		close(interruptCh)
+
+		nodeStopped, err := nodeManager.StopNode()
+		if err != nil {
+			log.Printf("Failed to stop node: %v", err.Error())
+			os.Exit(1)
+		}
+
+		select {
+		case <-nodeStopped:
+		case <-time.After(time.Second * 5):
+			log.Printf("Stopping node timed out")
+			os.Exit(1)
+		}
+	}()
+
+	return interruptCh
 }
