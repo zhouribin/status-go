@@ -37,6 +37,7 @@ var (
 
 	listenAddr = flag.String("listenaddr", ":30303", "IP address and port of this node (e.g. 127.0.0.1:30303)")
 	standalone = flag.Bool("standalone", true, "Don't actively connect to peers, wait for incoming connections")
+	bootnodes  = flag.String("bootnodes", "", "A list of bootnodes separated by comma")
 
 	// shh stuff
 	identityFile = flag.String("shh.identityfile", "", "Protocol identity file (private key used for asymmetric encryption)")
@@ -131,6 +132,15 @@ func makeNodeConfig() (*params.NodeConfig, error) {
 
 	nodeConfig.LightEthConfig.Enabled = *lesEnabled
 	nodeConfig.SwarmConfig.Enabled = *swarmEnabled
+
+	if *standalone {
+		nodeConfig.BootClusterConfig.Enabled = false
+		nodeConfig.BootClusterConfig.BootNodes = nil
+	}
+
+	if *bootnodes != "" {
+		nodeConfig.BootClusterConfig.BootNodes = strings.Split(*bootnodes, ",")
+	}
 
 	if *whisperEnabled {
 		return whisperConfig(nodeConfig)
