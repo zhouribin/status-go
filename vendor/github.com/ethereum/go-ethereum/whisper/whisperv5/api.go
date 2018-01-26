@@ -396,11 +396,15 @@ func (api *PublicWhisperAPI) Messages(ctx context.Context, crit Criteria) (*rpc.
 		}
 	}
 
+	if len(filter.Topics) == 0 {
+		return nil, ErrNoTopics
+	}
+
 	for i, bt := range crit.Topics {
 		if len(bt) == 0 || len(bt) > 4 {
 			return nil, fmt.Errorf("subscribe: topic %d has wrong size: %d", i, len(bt))
 		}
-		log.Warn("filter has been added with topic", bt[:])
+		log.Warn("filter has been added with topic", common.ToHex(bt[:]), nil)
 		filter.Topics = append(filter.Topics, bt[:])
 	}
 
@@ -615,6 +619,10 @@ func (api *PublicWhisperAPI) NewMessageFilter(req Criteria) (string, error) {
 
 	for _, topic := range f.Topics {
 		log.Warn("filter has been added with topics", common.ToHex(topic[:]), nil)
+	}
+
+	if len(f.Topics) == 0 {
+		return "", ErrNoTopics
 	}
 
 	id, err := api.w.Subscribe(f)
