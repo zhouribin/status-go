@@ -600,6 +600,10 @@ func (api *PublicWhisperAPI) NewMessageFilter(req Criteria) (string, error) {
 		}
 	}
 
+	if len(req.Topics) == 0 {
+		return "", ErrNoTopics
+	}
+
 	if len(req.Topics) > 0 {
 		topics = make([][]byte, len(req.Topics))
 		for _, topic := range req.Topics {
@@ -619,10 +623,6 @@ func (api *PublicWhisperAPI) NewMessageFilter(req Criteria) (string, error) {
 
 	for _, topic := range f.Topics {
 		log.Warn("filter has been added with topics", common.ToHex(topic[:]), nil)
-	}
-
-	if len(f.Topics) == 0 {
-		return "", ErrNoTopics
 	}
 
 	id, err := api.w.Subscribe(f)
