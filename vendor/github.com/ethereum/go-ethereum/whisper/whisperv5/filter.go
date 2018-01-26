@@ -214,11 +214,13 @@ func (f *Filter) MatchEnvelope(envelope *Envelope) bool {
 func (f *Filter) MatchTopic(topic TopicType) bool {
 	if len(f.Topics) == 0 {
 		// any topic matches
+		log.Warn("envelop has been opened with NULL topic")
 		return true
 	}
 
 	for _, bt := range f.Topics {
 		if matchSingleTopic(topic, bt) {
+			log.Warn("envelop has been opened with topic", "hash", topic.String(), common.ToHex(bt[:]), nil)
 			return true
 		}
 	}
