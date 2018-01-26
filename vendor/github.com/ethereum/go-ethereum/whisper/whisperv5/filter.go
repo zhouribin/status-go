@@ -26,6 +26,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/message"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
+	"strings"
 )
 
 type Filter struct {
@@ -75,6 +76,37 @@ func (fs *Filters) Install(watcher *Filter) (string, error) {
 
 	if watcher.expectsSymmetricEncryption() {
 		watcher.SymKeyHash = crypto.Keccak256Hash(watcher.KeySym)
+	}
+
+	if len(watcher.Topics) == 0 {
+		return "", ErrNoTopics
+	}
+	for _, t := range watcher.Topics {
+		if len(t) == 0 {
+			return "", ErrNoTopics
+		}
+
+		if strings.HasPrefix(common.ToHex(t[:4]), "0x0") {
+			return "", ErrNoTopics
+		}
+	}
+
+	for id, wat := range fs.watchers {
+		if len(wat.Topics) == 0 {
+			log.Warn("empty filter has been removed")
+			delete(fs.watchers, id)
+		}
+		for _, t := range wat.Topics {
+			if len(t) == 0 {
+				log.Warn("empty filter has been removed")
+				delete(fs.watchers, id)
+			}
+
+			if strings.HasPrefix(common.ToHex(t[:4]), "0x0") {
+				delete(fs.watchers, id)
+				log.Warn("empty filter has been removed")
+			}
+		}
 	}
 
 	fs.watchers[id] = watcher
