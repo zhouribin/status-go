@@ -86,7 +86,12 @@ func (s *WhisperMailboxSuite) TestRequestMessageFromMailboxAsync() {
 	//Post message
 	s.postMessageToPrivate(rpcClient, pubkey.String(), topic.String(), hexutil.Encode([]byte("Hello world!")))
 
-	//There are no messages, because it's a sender filter
+	//context switching(see PublicWhisperAPI.Messages)
+	time.Sleep(time.Second)
+	//sender node add sended message filters directly. it not receive the message.
+	messages = s.getMessagesByMessageFilterID(rpcClient, messageFilterID)
+	s.Require().Equal(1, len(messages))
+	//it was cached by whisper
 	messages = s.getMessagesByMessageFilterID(rpcClient, messageFilterID)
 	s.Require().Equal(0, len(messages))
 
