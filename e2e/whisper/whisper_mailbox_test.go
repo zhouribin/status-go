@@ -11,7 +11,7 @@ import (
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/p2p/discover"
-	"github.com/ethereum/go-ethereum/whisper/whisperv5"
+	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/status-im/status-go/e2e"
 	"github.com/status-im/status-go/geth/api"
 	"github.com/status-im/status-go/geth/rpc"
@@ -67,7 +67,7 @@ func (s *WhisperMailboxSuite) TestRequestMessageFromMailboxAsync() {
 	s.Require().NotNil(rpcClient)
 
 	//create topic
-	topic := whisperv5.BytesToTopic([]byte("topic name"))
+	topic := whisper.BytesToTopic([]byte("topic name"))
 
 	//Add key pair to whisper
 	keyID, err := senderWhisperService.NewKeyPair()
@@ -176,7 +176,7 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	groupChatKey, err := aliceWhisperService.GetSymKey(groupChatKeyID)
 	s.Require().NoError(err)
 	//generate group chat topic
-	groupChatTopic := whisperv5.BytesToTopic([]byte("groupChatTopic"))
+	groupChatTopic := whisper.BytesToTopic([]byte("groupChatTopic"))
 	groupChatPayload := newGroupChatParams(groupChatKey, groupChatTopic)
 	payloadStr, err := groupChatPayload.Encode()
 	s.Require().NoError(err)
@@ -187,14 +187,14 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	bobKey, err := bobWhisperService.GetPrivateKey(bobKeyID)
 	s.Require().NoError(err)
 	bobPubkey := hexutil.Bytes(crypto.FromECDSAPub(&bobKey.PublicKey))
-	bobAliceKeySendTopic := whisperv5.BytesToTopic([]byte("bobAliceKeySendTopic "))
+	bobAliceKeySendTopic := whisper.BytesToTopic([]byte("bobAliceKeySendTopic "))
 
 	charlieKeyID, err := charlieWhisperService.NewKeyPair()
 	s.Require().NoError(err)
 	charlieKey, err := charlieWhisperService.GetPrivateKey(charlieKeyID)
 	s.Require().NoError(err)
 	charliePubkey := hexutil.Bytes(crypto.FromECDSAPub(&charlieKey.PublicKey))
-	charlieAliceKeySendTopic := whisperv5.BytesToTopic([]byte("charlieAliceKeySendTopic "))
+	charlieAliceKeySendTopic := whisper.BytesToTopic([]byte("charlieAliceKeySendTopic "))
 
 	//bob and charlie create message filter
 	bobMessageFilterID := s.createPrivateChatMessageFilter(bobRPCClient, bobKeyID, bobAliceKeySendTopic.String())
@@ -274,7 +274,7 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	s.Require().Equal(helloWorldMessage, messages[0]["payload"].(string))
 }
 
-func newGroupChatParams(symkey []byte, topic whisperv5.TopicType) groupChatParams {
+func newGroupChatParams(symkey []byte, topic whisper.TopicType) groupChatParams {
 	groupChatKeyStr := hexutil.Bytes(symkey).String()
 	return groupChatParams{
 		Key:   groupChatKeyStr,
@@ -361,7 +361,7 @@ func (s *WhisperMailboxSuite) startMailboxBackend() (*api.StatusBackend, func())
 func (s *WhisperMailboxSuite) createPrivateChatMessageFilter(rpcCli *rpc.Client, privateKeyID string, topic string) string {
 	resp := rpcCli.CallRaw(`{
 			"jsonrpc": "2.0",
-			"method": "shh_newMessageFilter", "params": [
+			"method": "shh_subscribe", "params": [
 				{"privateKeyID": "` + privateKeyID + `", "topics": [ "` + topic + `"], "allowP2P":true}
 			],
 			"id": 1
@@ -380,7 +380,7 @@ func (s *WhisperMailboxSuite) createPrivateChatMessageFilter(rpcCli *rpc.Client,
 func (s *WhisperMailboxSuite) createGroupChatMessageFilter(rpcCli *rpc.Client, symkeyID string, topic string) string {
 	resp := rpcCli.CallRaw(`{
 			"jsonrpc": "2.0",
-			"method": "shh_newMessageFilter", "params": [
+			"method": "shh_subscribe", "params": [
 				{"symKeyID": "` + symkeyID + `", "topics": [ "` + topic + `"], "allowP2P":true}
 			],
 			"id": 1
