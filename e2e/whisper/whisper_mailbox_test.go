@@ -361,7 +361,7 @@ func (s *WhisperMailboxSuite) startMailboxBackend() (*api.StatusBackend, func())
 func (s *WhisperMailboxSuite) createPrivateChatMessageFilter(rpcCli *rpc.Client, privateKeyID string, topic string) string {
 	resp := rpcCli.CallRaw(`{
 			"jsonrpc": "2.0",
-			"method": "shh_subscribe", "params": [
+			"method": "shh_newMessageFilter", "params": [
 				{"privateKeyID": "` + privateKeyID + `", "topics": [ "` + topic + `"], "allowP2P":true}
 			],
 			"id": 1
@@ -380,7 +380,7 @@ func (s *WhisperMailboxSuite) createPrivateChatMessageFilter(rpcCli *rpc.Client,
 func (s *WhisperMailboxSuite) createGroupChatMessageFilter(rpcCli *rpc.Client, symkeyID string, topic string) string {
 	resp := rpcCli.CallRaw(`{
 			"jsonrpc": "2.0",
-			"method": "shh_subscribe", "params": [
+			"method": "shh_newMessageFilter", "params": [
 				{"symKeyID": "` + symkeyID + `", "topics": [ "` + topic + `"], "allowP2P":true}
 			],
 			"id": 1
