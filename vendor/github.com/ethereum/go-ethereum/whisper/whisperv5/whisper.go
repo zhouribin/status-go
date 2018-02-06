@@ -494,18 +494,6 @@ func (w *Whisper) GetSymKey(id string) ([]byte, error) {
 // Subscribe installs a new message handler used for filtering, decrypting
 // and subsequent storing of incoming messages.
 func (w *Whisper) Subscribe(f *Filter) (string, error) {
-	if len(f.Topics) == 0 {
-		return "", ErrNoTopics
-	}
-
-	for _, t := range f.Topics {
-		if len(t) == 0 {
-			return "", ErrNoTopics
-		}
-		if common.ToHex(t) == "0x0" {
-			return "", ErrNoTopics
-		}
-	}
 	return w.filters.Install(f)
 }
 
