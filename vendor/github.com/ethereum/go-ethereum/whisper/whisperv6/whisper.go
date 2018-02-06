@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"sync"
 	"time"
+	"sync/atomic"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -47,6 +48,8 @@ type Statistics struct {
 	cycles               int
 	totalMessagesCleared int
 }
+
+var Name string
 
 const (
 	maxMsgSizeIdx           = iota // Maximal message length allowed by the whisper node
@@ -88,6 +91,9 @@ type Whisper struct {
 	mailServer         MailServer // MailServer interface
 	notificationServer NotificationServer
 	envelopeTracer     EnvelopeTracer // Service collecting envelopes metadata
+
+	Name string
+	MessageCount int64
 }
 
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
@@ -254,6 +260,12 @@ func (whisper *Whisper) SetBloomFilter(bloom []byte) error {
 	}()
 
 	return nil
+}
+
+func (whisper *Whisper) newBloomFilter() {
+	b := make([]byte, bloomFilterSize)
+	whisper.SetBloomFilter(b)
+	whisper.settings.Store(bloomFilterToleranceIdx, b)
 }
 
 // SetMinimumPoW sets the minimal PoW required by this node
@@ -555,6 +567,7 @@ func (w *Whisper) GetSymKey(id string) ([]byte, error) {
 // and subsequent storing of incoming messages.
 func (whisper *Whisper) Subscribe(f *Filter) (string, error) {
 	s, err := whisper.filters.Install(f)
+	//log.Warn(fmt.Sprintf(">>>>>>>>>>>>>>>>>>> Add watcher %v TO %v\n", common.ToHex(f.Topics[0])), whisper.Name)
 	if err == nil {
 		whisper.updateBloomFilter(f)
 	}
@@ -666,6 +679,7 @@ func (whisper *Whisper) HandlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return whisper.runMessageLoop(whisperPeer, rw)
 }
 
+var TotalCount int64
 // runMessageLoop reads and processes inbound messages directly to merge into client-global state.
 func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 	for {
@@ -680,12 +694,13 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 			return errors.New("oversized message received")
 		}
 
-		log.Warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!", packet.Code)
 		switch packet.Code {
 		case statusCode:
 			// this should not happen, but no need to panic; just ignore this message.
 			log.Warn("unxepected status message received", "peer", p.peer.ID())
 		case messagesCode:
+			atomic.AddInt64(&whisper.MessageCount, 1)
+			atomic.AddInt64(&TotalCount, 1)
 			// decode the contained envelopes
 			var envelopes []*Envelope
 			if err := packet.Decode(&envelopes); err != nil {
@@ -810,12 +825,28 @@ func (whisper *Whisper) add(envelope *Envelope) (bool, error) {
 		// in this case the previous value is retrieved by BloomFilterTolerance()
 		// for a short period of peer synchronization.
 		if !bloomFilterMatch(whisper.BloomFilterTolerance(), envelope.Bloom()) {
-			return false, fmt.Errorf("envelope does not match bloom filter, hash=[%v], bloom: \n%x \n%x \n%x",
-				envelope.Hash().Hex(), whisper.BloomFilter(), envelope.Bloom(), envelope.Topic)
+			log.Warn(fmt.Sprintf("envelope does not match bloom filter," +
+				"\n\t hash=%v" +
+				"\n\t envBloom=%v" +
+				"\n\t bloom=%x" +
+				"\n\t tol=%x" +
+				"\n\t topic=%x" +
+				"\n\n",
+				envelope.Hash().Hex(), envelope.Bloom(), whisper.BloomFilter(), whisper.BloomFilterTolerance(), envelope.Topic))
+
+			return false, fmt.Errorf("envelope does not match bloom filter," +
+				"\n\t hash=%v" +
+				"\n\t envBloom=%v" +
+				"\n\t bloom=%x" +
+				"\n\t tol=%x" +
+				"\n\t topic=%x" +
+				"\n\n",
+				envelope.Hash().Hex(), envelope.Bloom(), whisper.BloomFilter(), whisper.BloomFilterTolerance(), envelope.Topic)
 		}
 	}
 
 	hash := envelope.Hash()
+
 
 	whisper.poolMu.Lock()
 	_, alreadyCached := whisper.envelopes[hash]
@@ -851,6 +882,7 @@ func (whisper *Whisper) postEvent(envelope *Envelope, isP2P bool) {
 		whisper.p2pMsgQueue <- envelope
 	} else {
 		whisper.checkOverflow()
+		//log.Warn("===== Adding envelop", envelope.Topic.String())
 		whisper.messageQueue <- envelope
 	}
 }
@@ -881,6 +913,7 @@ func (whisper *Whisper) processQueue() {
 			return
 
 		case e = <-whisper.messageQueue:
+			//log.Warn(fmt.Sprintf("<<<<<<<< NotifyWatchers %v\n", whisper.Name))
 			whisper.filters.NotifyWatchers(e, false)
 
 		case e = <-whisper.p2pMsgQueue:

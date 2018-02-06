@@ -512,7 +512,7 @@ func (api *PublicWhisperAPI) GetFilterMessages(id string) ([]*Message, error) {
 	for _, msg := range receivedMessages {
 		messages = append(messages, ToWhisperMessage(msg))
 	}
-
+	
 	return messages, nil
 }
 

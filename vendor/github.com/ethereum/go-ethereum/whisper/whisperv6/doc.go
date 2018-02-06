@@ -66,7 +66,7 @@ const (
 
 	MaxMessageSize        = uint32(10 * 1024 * 1024) // maximum accepted size of a message.
 	DefaultMaxMessageSize = uint32(1024 * 1024)
-	DefaultMinimumPoW     = 0.02
+	DefaultMinimumPoW     = 0.001
 
 	padSizeLimit      = 256 // just an arbitrary number, could be changed without breaking the protocol
 	messageQueueLimit = 1024

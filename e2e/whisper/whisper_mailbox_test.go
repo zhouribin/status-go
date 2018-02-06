@@ -2,21 +2,23 @@ package whisper
 
 import (
 	"encoding/json"
+	"os"
 	"strconv"
 	"testing"
 	"time"
 
-	"os"
-
+	"fmt"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
-	"github.com/ethereum/go-ethereum/p2p/discover"
+	_ "github.com/ethereum/go-ethereum/p2p/discover"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/status-im/status-go/e2e"
 	"github.com/status-im/status-go/geth/api"
+	"github.com/status-im/status-go/geth/log"
 	"github.com/status-im/status-go/geth/rpc"
 	. "github.com/status-im/status-go/testing"
 	"github.com/stretchr/testify/suite"
+	"sync/atomic"
 )
 
 type WhisperMailboxSuite struct {
@@ -25,102 +27,6 @@ type WhisperMailboxSuite struct {
 
 func TestWhisperMailboxTestSuite(t *testing.T) {
 	suite.Run(t, new(WhisperMailboxSuite))
-}
-
-func (s *WhisperMailboxSuite) TestRequestMessageFromMailboxAsync() {
-	//Start mailbox and status node
-	mailboxBackend, stop := s.startMailboxBackend()
-	defer stop()
-	mailboxNode, err := mailboxBackend.NodeManager().Node()
-	s.Require().NoError(err)
-	mailboxEnode := mailboxNode.Server().NodeInfo().Enode
-
-	sender, stop := s.startBackend("sender")
-	defer stop()
-	node, err := sender.NodeManager().Node()
-	s.Require().NoError(err)
-
-	s.Require().NotEqual(mailboxEnode, node.Server().NodeInfo().Enode)
-
-	err = sender.NodeManager().AddPeer(mailboxEnode)
-	s.Require().NoError(err)
-	//wait async processes on adding peer
-	time.Sleep(time.Second)
-
-	senderWhisperService, err := sender.NodeManager().WhisperService()
-	s.Require().NoError(err)
-
-	//Mark mailbox node trusted
-	parsedNode, err := discover.ParseNode(mailboxNode.Server().NodeInfo().Enode)
-	s.Require().NoError(err)
-	mailboxPeer := parsedNode.ID[:]
-	mailboxPeerStr := parsedNode.ID.String()
-	err = senderWhisperService.AllowP2PMessagesFromPeer(mailboxPeer)
-	s.Require().NoError(err)
-
-	//Generate mailbox symkey
-	password := "status-offline-inbox"
-	MailServerKeyID, err := senderWhisperService.AddSymKeyFromPassword(password)
-	s.Require().NoError(err)
-
-	rpcClient := sender.NodeManager().RPCClient()
-	s.Require().NotNil(rpcClient)
-
-	//create topic
-	topic := whisper.BytesToTopic([]byte("topic name"))
-
-	//Add key pair to whisper
-	keyID, err := senderWhisperService.NewKeyPair()
-	s.Require().NoError(err)
-	key, err := senderWhisperService.GetPrivateKey(keyID)
-	s.Require().NoError(err)
-	pubkey := hexutil.Bytes(crypto.FromECDSAPub(&key.PublicKey))
-
-	//Create message filter
-	messageFilterID := s.createPrivateChatMessageFilter(rpcClient, keyID, topic.String())
-
-	//Threre are no messages at filter
-	messages := s.getMessagesByMessageFilterID(rpcClient, messageFilterID)
-	s.Require().Equal(0, len(messages))
-
-	//Post message matching with filter (key and token)
-	s.postMessageToPrivate(rpcClient, pubkey.String(), topic.String(), hexutil.Encode([]byte("Hello world!")))
-
-	//Get message to make sure that it will come from the mailbox later
-	time.Sleep(1 * time.Second)
-	messages = s.getMessagesByMessageFilterID(rpcClient, messageFilterID)
-	s.Require().Equal(1, len(messages))
-
-	//act
-
-	//Request messages (including the previous one, expired) from mailbox
-	reqMessagesBody := `{
-		"jsonrpc": "2.0",
-		"id": 1,
-		"method": "shh_requestMessages",
-		"params": [{
-					"mailServerPeer":"` + mailboxPeerStr + `",
-					"topic":"` + topic.String() + `",
-					"symKeyID":"` + MailServerKeyID + `",
-					"from":0,
-					"to":` + strconv.FormatInt(time.Now().Unix(), 10) + `
-		}]
-	}`
-	resp := rpcClient.CallRaw(reqMessagesBody)
-	reqMessagesResp := baseRPCResponse{}
-	err = json.Unmarshal([]byte(resp), &reqMessagesResp)
-	s.Require().NoError(err)
-	s.Require().Nil(reqMessagesResp.Err)
-
-	//wait to receive message
-	time.Sleep(time.Second)
-	//And we receive message, it comes from mailbox
-	messages = s.getMessagesByMessageFilterID(rpcClient, messageFilterID)
-	s.Require().Equal(1, len(messages))
-
-	//check that there are no messages
-	messages = s.getMessagesByMessageFilterID(rpcClient, messageFilterID)
-	s.Require().Equal(0, len(messages))
 }
 
 func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
@@ -136,6 +42,15 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 
 	charlieBackend, stop := s.startBackend("charlie")
 	defer stop()
+
+	wAlice, _ := aliceBackend.NodeManager().WhisperService()
+	wAlice.Name = "Alice"
+	wBob, _ := bobBackend.NodeManager().WhisperService()
+	wBob.Name = "Bob"
+	wCharlie, _ := charlieBackend.NodeManager().WhisperService()
+	wCharlie.Name = "Charlie"
+	wMailboxBackend, _ := mailboxBackend.NodeManager().WhisperService()
+	wMailboxBackend.Name = "Mail Server"
 
 	//add mailbox to static peers
 	mailboxNode, err := mailboxBackend.NodeManager().Node()
@@ -170,6 +85,9 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	charlieMailServerKeyID, err := charlieWhisperService.AddSymKeyFromPassword(password)
 	s.Require().NoError(err)
 
+	_ = bobMailServerKeyID
+	_ = charlieMailServerKeyID
+
 	//generate group chat symkey and topic
 	groupChatKeyID, err := aliceWhisperService.GenerateSymKey()
 	s.Require().NoError(err)
@@ -197,15 +115,32 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	charlieAliceKeySendTopic := whisper.BytesToTopic([]byte("charlieAliceKeySendTopic "))
 
 	//bob and charlie create message filter
+	wBob.SetBloomFilter(whisper.TopicToBloom(bobAliceKeySendTopic))
+	wBob.SetBloomFilter(whisper.TopicToBloom(charlieAliceKeySendTopic))
+	wBob.SetBloomFilter(whisper.TopicToBloom(groupChatTopic))
+
+	wCharlie.SetBloomFilter(whisper.TopicToBloom(bobAliceKeySendTopic))
+	wCharlie.SetBloomFilter(whisper.TopicToBloom(charlieAliceKeySendTopic))
+	wCharlie.SetBloomFilter(whisper.TopicToBloom(groupChatTopic))
+
+	wAlice.SetBloomFilter(whisper.TopicToBloom(bobAliceKeySendTopic))
+	wAlice.SetBloomFilter(whisper.TopicToBloom(charlieAliceKeySendTopic))
+	wAlice.SetBloomFilter(whisper.TopicToBloom(groupChatTopic))
+
 	bobMessageFilterID := s.createPrivateChatMessageFilter(bobRPCClient, bobKeyID, bobAliceKeySendTopic.String())
+	s.createPrivateChatMessageFilter(bobRPCClient, bobKeyID, charlieAliceKeySendTopic.String())
+
 	charlieMessageFilterID := s.createPrivateChatMessageFilter(charlieRPCClient, charlieKeyID, charlieAliceKeySendTopic.String())
+	s.createPrivateChatMessageFilter(charlieRPCClient, charlieKeyID, bobAliceKeySendTopic.String())
+
+	time.Sleep(2 * time.Second)
 
 	//Alice send message with symkey and topic to bob and charlie
 	s.postMessageToPrivate(aliceRPCClient, bobPubkey.String(), bobAliceKeySendTopic.String(), payloadStr)
 	s.postMessageToPrivate(aliceRPCClient, charliePubkey.String(), charlieAliceKeySendTopic.String(), payloadStr)
 
 	//wait to receive
-	time.Sleep(time.Second)
+	time.Sleep(5 * time.Second)
 
 	//bob receive group chat data and add it to his node
 	//1. bob get group chat details
@@ -239,39 +174,27 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 
 	//alice send message to group chat
 	helloWorldMessage := hexutil.Encode([]byte("Hello world!"))
-	s.postMessageToGroup(aliceRPCClient, groupChatKeyID, groupChatTopic.String(), helloWorldMessage)
-	time.Sleep(time.Second) //it need to receive envelopes by bob and charlie nodes
+
+	for i := 0; i < 100; i++ {
+		s.postMessageToGroup(aliceRPCClient, groupChatKeyID, groupChatTopic.String(), helloWorldMessage)
+		time.Sleep(500 * time.Millisecond)
+	}
+	time.Sleep(10 * time.Second) //it need to receive envelopes by bob and charlie nodes
 
 	//bob receive group chat message
 	messages = s.getMessagesByMessageFilterID(bobRPCClient, bobGroupChatMessageFilterID)
-	s.Require().Equal(1, len(messages))
+	s.Require().Equal(true, len(messages) > 0)
 	s.Require().Equal(helloWorldMessage, messages[0]["payload"].(string))
 
 	//charlie receive group chat message
 	messages = s.getMessagesByMessageFilterID(charlieRPCClient, charlieGroupChatMessageFilterID)
-	s.Require().Equal(1, len(messages))
+	s.Require().Equal(true, len(messages) > 0)
 	s.Require().Equal(helloWorldMessage, messages[0]["payload"].(string))
 
-	//check that we don't receive messages each one time
-	messages = s.getMessagesByMessageFilterID(bobRPCClient, bobGroupChatMessageFilterID)
-	s.Require().Equal(0, len(messages))
-	messages = s.getMessagesByMessageFilterID(charlieRPCClient, charlieGroupChatMessageFilterID)
-	s.Require().Equal(0, len(messages))
-
-	//Request each one messages from mailbox using enode
-	s.requestHistoricMessages(bobRPCClient, mailboxEnode, bobMailServerKeyID, groupChatTopic.String())
-	s.requestHistoricMessages(charlieRPCClient, mailboxEnode, charlieMailServerKeyID, groupChatTopic.String())
-	time.Sleep(time.Second) //wait to receive p2p messages
-
-	//bob receive p2p message from grop chat filter
-	messages = s.getMessagesByMessageFilterID(bobRPCClient, bobGroupChatMessageFilterID)
-	s.Require().Equal(1, len(messages))
-	s.Require().Equal(helloWorldMessage, messages[0]["payload"].(string))
-
-	//charlie receive p2p message from grop chat filter
-	messages = s.getMessagesByMessageFilterID(charlieRPCClient, charlieGroupChatMessageFilterID)
-	s.Require().Equal(1, len(messages))
-	s.Require().Equal(helloWorldMessage, messages[0]["payload"].(string))
+	log.Warn(fmt.Sprintf("Alice got: %v\n", atomic.LoadInt64(&wAlice.MessageCount)))
+	log.Warn(fmt.Sprintf("Bob got: %v\n", atomic.LoadInt64(&wBob.MessageCount)))
+	log.Warn(fmt.Sprintf("Charlie got: %v\n", atomic.LoadInt64(&wCharlie.MessageCount)))
+	log.Warn(fmt.Sprintf("In total: %v\n", atomic.LoadInt64(&whisper.TotalCount)))
 }
 
 func newGroupChatParams(symkey []byte, topic whisper.TopicType) groupChatParams {
@@ -311,6 +234,12 @@ func (s *WhisperMailboxSuite) startBackend(name string) (*api.StatusBackend, fun
 	nodeConfig.DataDir = datadir
 	s.Require().NoError(err)
 	s.Require().False(backend.IsNodeRunning())
+
+	if addr, err := GetRemoteURL(); err == nil {
+		nodeConfig.UpstreamConfig.Enabled = true
+		nodeConfig.UpstreamConfig.URL = addr
+	}
+
 	nodeStarted, err := backend.StartNode(nodeConfig)
 	s.Require().NoError(err)
 	<-nodeStarted // wait till node is started
@@ -324,7 +253,6 @@ func (s *WhisperMailboxSuite) startBackend(name string) (*api.StatusBackend, fun
 		s.False(backend.IsNodeRunning())
 		os.RemoveAll(datadir)
 	}
-
 }
 
 //Start mailbox node
@@ -359,14 +287,15 @@ func (s *WhisperMailboxSuite) startMailboxBackend() (*api.StatusBackend, func())
 
 //createPrivateChatMessageFilter create message filter with asymmetric encryption
 func (s *WhisperMailboxSuite) createPrivateChatMessageFilter(rpcCli *rpc.Client, privateKeyID string, topic string) string {
-	resp := rpcCli.CallRaw(`{
+	req := `{
 			"jsonrpc": "2.0",
 			"method": "shh_newMessageFilter", "params": [
 				{"privateKeyID": "` + privateKeyID + `", "topics": [ "` + topic + `"], "allowP2P":true}
 			],
 			"id": 1
-		}`)
+		}`
 
+	resp := rpcCli.CallRaw(req)
 	msgFilterResp := returnedIDResponse{}
 	err := json.Unmarshal([]byte(resp), &msgFilterResp)
 	messageFilterID := msgFilterResp.Result
@@ -378,14 +307,15 @@ func (s *WhisperMailboxSuite) createPrivateChatMessageFilter(rpcCli *rpc.Client,
 
 //createGroupChatMessageFilter create message filter with symmetric encryption
 func (s *WhisperMailboxSuite) createGroupChatMessageFilter(rpcCli *rpc.Client, symkeyID string, topic string) string {
-	resp := rpcCli.CallRaw(`{
+	req := `{
 			"jsonrpc": "2.0",
 			"method": "shh_newMessageFilter", "params": [
 				{"symKeyID": "` + symkeyID + `", "topics": [ "` + topic + `"], "allowP2P":true}
 			],
 			"id": 1
-		}`)
+		}`
 
+	resp := rpcCli.CallRaw(req)
 	msgFilterResp := returnedIDResponse{}
 	err := json.Unmarshal([]byte(resp), &msgFilterResp)
 	messageFilterID := msgFilterResp.Result
@@ -424,7 +354,7 @@ func (s *WhisperMailboxSuite) postMessageToGroup(rpcCli *rpc.Client, groupChatKe
 			"symKeyID": "` + groupChatKeyID + `",
 			"topic": "` + topic + `",
 			"payload": "` + payload + `",
-			"powTarget": 0.001,
+			"powTarget": 1,
 			"powTime": 2
 			}
 		],

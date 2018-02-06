@@ -113,6 +113,7 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 	defer fs.mutex.RUnlock()
 
 	i := -1 // only used for logging info
+	//log.Warn(fmt.Sprintf("<<<<<<<<<<<<<<<<<<< %v\n", len(fs.watchers)))
 	for _, watcher := range fs.watchers {
 		i++
 		if p2pMessage && !watcher.AllowP2P {
@@ -121,6 +122,7 @@ func (fs *Filters) NotifyWatchers(env *Envelope, p2pMessage bool) {
 		}
 
 		var match bool
+		//log.Warn("++++", common.ToHex(watcher.Topics[0]), env.Topic.String())
 		if msg != nil {
 			match = watcher.MatchMessage(msg)
 		} else {
