@@ -265,7 +265,6 @@ func (whisper *Whisper) SetBloomFilter(bloom []byte) error {
 func (whisper *Whisper) newBloomFilter() {
 	b := make([]byte, bloomFilterSize)
 	whisper.SetBloomFilter(b)
-	whisper.settings.Store(bloomFilterToleranceIdx, b)
 }
 
 // SetMinimumPoW sets the minimal PoW required by this node
@@ -569,6 +568,9 @@ func (whisper *Whisper) Subscribe(f *Filter) (string, error) {
 	s, err := whisper.filters.Install(f)
 	//log.Warn(fmt.Sprintf(">>>>>>>>>>>>>>>>>>> Add watcher %v TO %v\n", common.ToHex(f.Topics[0])), whisper.Name)
 	if err == nil {
+		if whisper.BloomFilter() == nil {
+			whisper.newBloomFilter()
+		}
 		whisper.updateBloomFilter(f)
 	}
 	return s, err
@@ -824,6 +826,7 @@ func (whisper *Whisper) add(envelope *Envelope) (bool, error) {
 		// maybe the value was recently changed, and the peers did not adjust yet.
 		// in this case the previous value is retrieved by BloomFilterTolerance()
 		// for a short period of peer synchronization.
+		log.Warn("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
 		if !bloomFilterMatch(whisper.BloomFilterTolerance(), envelope.Bloom()) {
 			log.Warn(fmt.Sprintf("envelope does not match bloom filter," +
 				"\n\t hash=%v" +
@@ -1114,6 +1117,10 @@ func isFullNode(bloom []byte) bool {
 		}
 	}
 	return true
+}
+
+func BloomFilterMatch(filter, sample []byte) bool {
+	return bloomFilterMatch(filter, sample)
 }
 
 func bloomFilterMatch(filter, sample []byte) bool {

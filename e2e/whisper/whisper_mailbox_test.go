@@ -1,13 +1,14 @@
 package whisper
 
 import (
+	"crypto/rand"
 	"encoding/json"
 	"os"
-	"strconv"
 	"testing"
 	"time"
 
 	"fmt"
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	"github.com/ethereum/go-ethereum/crypto"
 	_ "github.com/ethereum/go-ethereum/p2p/discover"
@@ -18,6 +19,7 @@ import (
 	"github.com/status-im/status-go/geth/rpc"
 	. "github.com/status-im/status-go/testing"
 	"github.com/stretchr/testify/suite"
+	"strconv"
 	"sync/atomic"
 )
 
@@ -43,6 +45,9 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	charlieBackend, stop := s.startBackend("charlie")
 	defer stop()
 
+	grinchBackend, stop := s.startBackend("grinch")
+	defer stop()
+
 	wAlice, _ := aliceBackend.NodeManager().WhisperService()
 	wAlice.Name = "Alice"
 	wBob, _ := bobBackend.NodeManager().WhisperService()
@@ -51,11 +56,14 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	wCharlie.Name = "Charlie"
 	wMailboxBackend, _ := mailboxBackend.NodeManager().WhisperService()
 	wMailboxBackend.Name = "Mail Server"
+	wGrinchBackend, _ := grinchBackend.NodeManager().WhisperService()
+	wGrinchBackend.Name = "Mail Server"
 
 	//add mailbox to static peers
 	mailboxNode, err := mailboxBackend.NodeManager().Node()
 	s.Require().NoError(err)
 	mailboxEnode := mailboxNode.Server().NodeInfo().Enode
+	_ = mailboxEnode
 
 	err = aliceBackend.NodeManager().AddPeer(mailboxEnode)
 	s.Require().NoError(err)
@@ -63,8 +71,43 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	s.Require().NoError(err)
 	err = charlieBackend.NodeManager().AddPeer(mailboxEnode)
 	s.Require().NoError(err)
+	err = grinchBackend.NodeManager().AddPeer(mailboxEnode)
+	s.Require().NoError(err)
+
+	// Grinch knwons everyone
+	aliceNode, err := aliceBackend.NodeManager().Node()
+	s.Require().NoError(err)
+	aliceEnode := aliceNode.Server().NodeInfo().Enode
+	err = grinchBackend.NodeManager().AddPeer(aliceEnode)
+	s.Require().NoError(err)
+
+	bobNode, err := bobBackend.NodeManager().Node()
+	s.Require().NoError(err)
+	bobEnode := bobNode.Server().NodeInfo().Enode
+	err = grinchBackend.NodeManager().AddPeer(bobEnode)
+	s.Require().NoError(err)
+
+	charlieNode, err := charlieBackend.NodeManager().Node()
+	s.Require().NoError(err)
+	charlieEnode := charlieNode.Server().NodeInfo().Enode
+	err = grinchBackend.NodeManager().AddPeer(charlieEnode)
+	s.Require().NoError(err)
+
+	err = aliceBackend.NodeManager().AddPeer(bobEnode)
+	s.Require().NoError(err)
+	err = aliceBackend.NodeManager().AddPeer(charlieEnode)
+	s.Require().NoError(err)
+	err = bobBackend.NodeManager().AddPeer(aliceEnode)
+	s.Require().NoError(err)
+	err = bobBackend.NodeManager().AddPeer(charlieEnode)
+	s.Require().NoError(err)
+	err = charlieBackend.NodeManager().AddPeer(aliceEnode)
+	s.Require().NoError(err)
+	err = charlieBackend.NodeManager().AddPeer(bobEnode)
+	s.Require().NoError(err)
+
 	//wait async processes on adding peer
-	time.Sleep(time.Second)
+	time.Sleep(5 * time.Second)
 
 	//get whisper service
 	aliceWhisperService, err := aliceBackend.NodeManager().WhisperService()
@@ -73,16 +116,22 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	s.Require().NoError(err)
 	charlieWhisperService, err := charlieBackend.NodeManager().WhisperService()
 	s.Require().NoError(err)
+	grinchWhisperService, err := grinchBackend.NodeManager().WhisperService()
+	s.Require().NoError(err)
 	//get rpc client
 	aliceRPCClient := aliceBackend.NodeManager().RPCClient()
 	bobRPCClient := bobBackend.NodeManager().RPCClient()
 	charlieRPCClient := charlieBackend.NodeManager().RPCClient()
+	grinchRPCClient := grinchBackend.NodeManager().RPCClient()
+	_ = grinchRPCClient
 
 	//bob and charlie add mailserver key
 	password := "status-offline-inbox"
 	bobMailServerKeyID, err := bobWhisperService.AddSymKeyFromPassword(password)
 	s.Require().NoError(err)
 	charlieMailServerKeyID, err := charlieWhisperService.AddSymKeyFromPassword(password)
+	s.Require().NoError(err)
+	_, err = grinchWhisperService.AddSymKeyFromPassword(password)
 	s.Require().NoError(err)
 
 	_ = bobMailServerKeyID
@@ -115,18 +164,6 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	charlieAliceKeySendTopic := whisper.BytesToTopic([]byte("charlieAliceKeySendTopic "))
 
 	//bob and charlie create message filter
-	wBob.SetBloomFilter(whisper.TopicToBloom(bobAliceKeySendTopic))
-	wBob.SetBloomFilter(whisper.TopicToBloom(charlieAliceKeySendTopic))
-	wBob.SetBloomFilter(whisper.TopicToBloom(groupChatTopic))
-
-	wCharlie.SetBloomFilter(whisper.TopicToBloom(bobAliceKeySendTopic))
-	wCharlie.SetBloomFilter(whisper.TopicToBloom(charlieAliceKeySendTopic))
-	wCharlie.SetBloomFilter(whisper.TopicToBloom(groupChatTopic))
-
-	wAlice.SetBloomFilter(whisper.TopicToBloom(bobAliceKeySendTopic))
-	wAlice.SetBloomFilter(whisper.TopicToBloom(charlieAliceKeySendTopic))
-	wAlice.SetBloomFilter(whisper.TopicToBloom(groupChatTopic))
-
 	bobMessageFilterID := s.createPrivateChatMessageFilter(bobRPCClient, bobKeyID, bobAliceKeySendTopic.String())
 	s.createPrivateChatMessageFilter(bobRPCClient, bobKeyID, charlieAliceKeySendTopic.String())
 
@@ -155,6 +192,8 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	s.Require().NotEmpty(bobGroupChatSymkeyID)
 
 	//3. bob create message filter to node by group chat topic
+	s.createGroupChatMessageFilter(aliceRPCClient, groupChatKeyID, bobGroupChatData.Topic) // make Alice as light whisper node
+
 	bobGroupChatMessageFilterID := s.createGroupChatMessageFilter(bobRPCClient, bobGroupChatSymkeyID, bobGroupChatData.Topic)
 
 	//charlie receive group chat data and add it to his node
@@ -175,11 +214,43 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	//alice send message to group chat
 	helloWorldMessage := hexutil.Encode([]byte("Hello world!"))
 
+	randomTopic := make([]byte, 16)
+	grinchChatKeyID, err := grinchWhisperService.GenerateSymKey()
+	s.Require().NoError(err)
+	s.Require().NotEmpty(grinchChatKeyID)
+
+	ch := make(chan struct{})
+	grinchSend := 0
+	go func(ch chan struct{}) {
+		for {
+			select {
+			case <-ch:
+				return
+			default:
+				rand.Read(randomTopic)
+				whisperRandomTopic := whisper.BytesToTopic(randomTopic)
+				randomTopicBloom := whisper.TopicToBloom(whisperRandomTopic)
+
+				aliceMatched := whisper.BloomFilterMatch(wAlice.BloomFilter(), randomTopicBloom)
+				bobMatched := whisper.BloomFilterMatch(wBob.BloomFilter(), randomTopicBloom)
+				charlieMatched := whisper.BloomFilterMatch(wCharlie.BloomFilter(), randomTopicBloom)
+				if aliceMatched || bobMatched || charlieMatched {
+					log.Warn(fmt.Sprintf("!!!!!! Topic=%v Alice=%v Bob=%v Charlie=%v\n", common.ToHex(whisperRandomTopic[:]), aliceMatched, bobMatched, charlieMatched))
+					log.Warn(fmt.Sprintf("!!!!!! Alice=%x\n", wAlice.BloomFilter()))
+				}
+
+				s.postMessageToGroup(grinchRPCClient, grinchChatKeyID, (&whisperRandomTopic).String(), helloWorldMessage)
+				grinchSend++
+			}
+		}
+	}(ch)
+
 	for i := 0; i < 100; i++ {
 		s.postMessageToGroup(aliceRPCClient, groupChatKeyID, groupChatTopic.String(), helloWorldMessage)
 		time.Sleep(500 * time.Millisecond)
 	}
 	time.Sleep(10 * time.Second) //it need to receive envelopes by bob and charlie nodes
+	close(ch)
 
 	//bob receive group chat message
 	messages = s.getMessagesByMessageFilterID(bobRPCClient, bobGroupChatMessageFilterID)
@@ -194,7 +265,10 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	log.Warn(fmt.Sprintf("Alice got: %v\n", atomic.LoadInt64(&wAlice.MessageCount)))
 	log.Warn(fmt.Sprintf("Bob got: %v\n", atomic.LoadInt64(&wBob.MessageCount)))
 	log.Warn(fmt.Sprintf("Charlie got: %v\n", atomic.LoadInt64(&wCharlie.MessageCount)))
-	log.Warn(fmt.Sprintf("In total: %v\n", atomic.LoadInt64(&whisper.TotalCount)))
+	log.Warn(fmt.Sprintf("Grinch got: %v\n", atomic.LoadInt64(&wGrinchBackend.MessageCount)))
+	log.Warn(fmt.Sprintf("Mail got: %v\n", atomic.LoadInt64(&wMailboxBackend.MessageCount)))
+	log.Warn(fmt.Sprintf("\nIn total: %v\n", atomic.LoadInt64(&whisper.TotalCount)))
+	log.Warn(fmt.Sprintf("\nGrinch sent: %v\n", grinchSend))
 }
 
 func newGroupChatParams(symkey []byte, topic whisper.TopicType) groupChatParams {
