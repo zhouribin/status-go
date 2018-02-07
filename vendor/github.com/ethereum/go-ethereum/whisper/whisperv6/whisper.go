@@ -138,6 +138,21 @@ func New(cfg *Config) *Whisper {
 	return whisper
 }
 
+func (w *Whisper) PeersNum() int {
+	w.peerMu.RLock()
+	peers := len(w.peers)
+	w.peerMu.RUnlock()
+	return peers
+}
+
+
+func (w *Whisper) ResetPeers() {
+	w.peerMu.Lock()
+	w.peers = make(map[*Peer]struct{})
+	w.peerMu.Unlock()
+	return
+}
+
 // MinPow returns the PoW value required by this node.
 func (whisper *Whisper) MinPow() float64 {
 	val, exist := whisper.settings.Load(minPowIdx)

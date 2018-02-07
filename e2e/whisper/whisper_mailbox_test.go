@@ -65,6 +65,17 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	mailboxEnode := mailboxNode.Server().NodeInfo().Enode
 	_ = mailboxEnode
 
+	// reset peers
+	//wait async processes on adding peer
+	time.Sleep(5 * time.Second)
+	log.Warn(fmt.Sprintf("\n\n+++Before reset\n\nAlise's peers: %v\nBob's peers: %v\nCharlie's peers: %v\nGrinch's peers: %v\nMail server's peers: %v\n\n", wAlice.PeersNum(), wBob.PeersNum(), wCharlie.PeersNum(), wGrinchBackend.PeersNum(), wMailboxBackend.PeersNum()))
+	wAlice.ResetPeers()
+	wBob.ResetPeers()
+	wCharlie.ResetPeers()
+	wGrinchBackend.ResetPeers()
+	wMailboxBackend.ResetPeers()
+	log.Warn(fmt.Sprintf("\n\n+++After reset\n\nAlise's peers: %v\nBob's peers: %v\nCharlie's peers: %v\nGrinch's peers: %v\nMail server's peers: %v\n\n", wAlice.PeersNum(), wBob.PeersNum(), wCharlie.PeersNum(), wGrinchBackend.PeersNum(), wMailboxBackend.PeersNum()))
+
 	err = aliceBackend.NodeManager().AddPeer(mailboxEnode)
 	s.Require().NoError(err)
 	err = bobBackend.NodeManager().AddPeer(mailboxEnode)
@@ -108,6 +119,8 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 
 	//wait async processes on adding peer
 	time.Sleep(5 * time.Second)
+
+	log.Warn(fmt.Sprintf("\n\n+++After add peer\n\nAlise's peers: %v\nBob's peers: %v\nCharlie's peers: %v\nGrinch's peers: %v\nMail server's peers: %v\n\n", wAlice.PeersNum(), wBob.PeersNum(), wCharlie.PeersNum(), wGrinchBackend.PeersNum(), wMailboxBackend.PeersNum()))
 
 	//get whisper service
 	aliceWhisperService, err := aliceBackend.NodeManager().WhisperService()
@@ -269,6 +282,8 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	log.Warn(fmt.Sprintf("Mail got: %v\n", atomic.LoadInt64(&wMailboxBackend.MessageCount)))
 	log.Warn(fmt.Sprintf("\nIn total: %v\n", atomic.LoadInt64(&whisper.TotalCount)))
 	log.Warn(fmt.Sprintf("\nGrinch sent: %v\n", grinchSend))
+
+	log.Warn(fmt.Sprintf("\n\nAlise's peers: %v\nBob's peers: %v\nCharlie's peers: %v\nGrinch's peers: %v\nMail server's peers: %v\n\n", wAlice.PeersNum(), wBob.PeersNum(), wCharlie.PeersNum(), wGrinchBackend.PeersNum(), wMailboxBackend.PeersNum()))
 }
 
 func newGroupChatParams(symkey []byte, topic whisper.TopicType) groupChatParams {
