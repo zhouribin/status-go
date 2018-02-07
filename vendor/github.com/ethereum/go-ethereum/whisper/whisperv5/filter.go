@@ -26,7 +26,6 @@ import (
 	"github.com/ethereum/go-ethereum/common/message"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
-	"strings"
 )
 
 type Filter struct {
