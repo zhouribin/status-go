@@ -500,7 +500,7 @@ func (m *NodeManager) initLog(config *params.NodeConfig) {
 	if config.LogFile != "" {
 		err := log.SetLogFile(config.LogFile)
 		if err != nil {
-			fmt.Println("Failed to open log file, using stdout")
+			log.Error("Failed to open log file", "path", config.LogFile, "error", err)
 		}
 	}
 }
