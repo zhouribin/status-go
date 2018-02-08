@@ -24,6 +24,7 @@ import (
 	"fmt"
 	"runtime"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/ethereum/go-ethereum/common"
@@ -585,6 +586,7 @@ func (wh *Whisper) HandlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return wh.runMessageLoop(whisperPeer, rw)
 }
 
+var counter int64
 // runMessageLoop reads and processes inbound messages directly to merge into client-global state.
 func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 	for {
@@ -604,6 +606,11 @@ func (wh *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 			// this should not happen, but no need to panic; just ignore this message.
 			log.Warn("unxepected status message received", "peer", p.peer.ID())
 		case messagesCode:
+			atomic.AddInt64(&counter,int64(1))
+			a:=atomic.LoadInt64(&counter)
+			//if a%10==0 {
+				fmt.Println("Num of messages:",a)
+			//}
 			// decode the contained envelopes
 			var envelope Envelope
 			if err := packet.Decode(&envelope); err != nil {

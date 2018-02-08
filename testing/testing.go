@@ -19,6 +19,10 @@ import (
 )
 
 var (
+	EnodeReceiver = flag.String("receiver_enode", "", "Custom game resources directory")
+	NumOfNodes= flag.Int("num_of_nodes",5,"")
+	NetworkSelected string
+
 	networkSelected = flag.String("network", "statuschain", "-network=NETWORKID or -network=NETWORKNAME to select network used for tests")
 
 	// ErrNoRemoteURL is returned when network id has no associated url.
@@ -52,6 +56,7 @@ func init() {
 	}
 
 	flag.Parse()
+	NetworkSelected=*networkSelected
 
 	// setup root directory
 	const pathSeparator = string(os.PathSeparator)

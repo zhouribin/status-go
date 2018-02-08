@@ -159,3 +159,15 @@ vendor-check:
 
 dep-install:
 	go get -u github.com/golang/dep/cmd/dep
+
+perf_bg:
+	go test ./e2e/profiling/... -network=3 -test.v -test.bench ^BenchmarkNodeSyncBackgroundShhOff$
+perf_bg_ssh:
+	go test ./e2e/profiling/... -network=3 -test.v -test.bench ^BenchmarkNodeSyncBackgroundShhOn$
+perf_sync:
+	go test ./e2e/profiling/... -network=3 -test.v -test.bench ^BenchmarkNodeSync$
+perf_upstream:
+	go test ./e2e/profiling/... -network=3 -test.v -test.bench ^BenchmarkNodeUpstream$
+perf_receive:
+	go test ./e2e/profiling/... -network=777 -test.v -test.bench ^BenchmarkNodeReceiving$
+
