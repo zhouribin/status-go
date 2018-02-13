@@ -107,7 +107,8 @@
     "trie",
     "whisper/mailserver",
     "whisper/notifications",
-    "whisper/whisperv5"
+    "whisper/whisperv5",
+    "whisper/whisperv6"
   ]
   revision = "5b2cc44bf2b32bb482def02d7c8fa32ba08d0bf4"
   source = "https://github.com/status-im/go-ethereum.git"

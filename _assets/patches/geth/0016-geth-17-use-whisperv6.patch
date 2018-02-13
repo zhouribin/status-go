@@ -1,0 +1,83 @@
+diff --git a/whisper/mailserver/mailserver.go b/whisper/mailserver/mailserver.go
+index 0ec6ec570..6555fd5c0 100644
+--- a/whisper/mailserver/mailserver.go
++++ b/whisper/mailserver/mailserver.go
+@@ -26,7 +26,7 @@ import (
+ 	"github.com/ethereum/go-ethereum/crypto"
+ 	"github.com/ethereum/go-ethereum/log"
+ 	"github.com/ethereum/go-ethereum/rlp"
+-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
++	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+ 	"github.com/syndtr/goleveldb/leveldb"
+ 	"github.com/syndtr/goleveldb/leveldb/util"
+ )
+diff --git a/whisper/notifications/discovery.go b/whisper/notifications/discovery.go
+index de8ec85be..9a131ded1 100644
+--- a/whisper/notifications/discovery.go
++++ b/whisper/notifications/discovery.go
+@@ -9,7 +9,7 @@ import (
+ 	"github.com/ethereum/go-ethereum/common"
+ 	"github.com/ethereum/go-ethereum/crypto"
+ 	"github.com/ethereum/go-ethereum/log"
+-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
++	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+ )
+ 
+ const (
+diff --git a/whisper/notifications/server.go b/whisper/notifications/server.go
+index 7f27f0301..94dd1b683 100644
+--- a/whisper/notifications/server.go
++++ b/whisper/notifications/server.go
+@@ -9,11 +9,12 @@ import (
+ 	"crypto/ecdsa"
+ 	"encoding/hex"
+ 	"encoding/json"
++
+ 	"github.com/ethereum/go-ethereum/common"
+ 	"github.com/ethereum/go-ethereum/crypto"
+ 	"github.com/ethereum/go-ethereum/log"
+ 	"github.com/ethereum/go-ethereum/p2p"
+-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
++	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+ 	"github.com/status-im/status-go/geth/params"
+ )
+ 
+@@ -58,9 +59,9 @@ type NotificationServer struct {
+ // ClientSession abstracts notification client, which expects notifications whenever
+ // some envelope can be decoded with session key (key hash is compared for optimization)
+ type ClientSession struct {
+-	ClientKey      string      // public key uniquely identifying a client
+-	SessionKey     []byte      // actual symkey used for client - server communication
+-	SessionKeyHash common.Hash // The Keccak256Hash of the symmetric key, which is shared between server/client
++	ClientKey       string      // public key uniquely identifying a client
++	SessionKey      []byte      // actual symkey used for client - server communication
++	SessionKeyHash  common.Hash // The Keccak256Hash of the symmetric key, which is shared between server/client
+ 	SessionKeyInput []byte      // raw symkey used as input for actual SessionKey
+ }
+ 
+diff --git a/whisper/notifications/utils.go b/whisper/notifications/utils.go
+index cca3fba71..dc2e78d73 100644
+--- a/whisper/notifications/utils.go
++++ b/whisper/notifications/utils.go
+@@ -7,7 +7,7 @@ import (
+ 
+ 	crand "crypto/rand"
+ 
+-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
++	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+ 	"golang.org/x/crypto/pbkdf2"
+ )
+ 
+diff --git a/whisper/shhclient/client.go b/whisper/shhclient/client.go
+index 61b4775d9..d9754f350 100644
+--- a/whisper/shhclient/client.go
++++ b/whisper/shhclient/client.go
+@@ -22,7 +22,7 @@ import (
+ 	"github.com/ethereum/go-ethereum"
+ 	"github.com/ethereum/go-ethereum/common/hexutil"
+ 	"github.com/ethereum/go-ethereum/rpc"
+-	whisper "github.com/ethereum/go-ethereum/whisper/whisperv5"
++	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
+ )
+ 
+ // Client defines typed wrappers for the Whisper v5 RPC API.

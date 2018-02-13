@@ -30,6 +30,7 @@ Instructions for creating a patch from the command line:
 - [`0013-whisperv6-notifications-envelopeversion.patch`](./0013-whisperv6-notifications-envelopeversion.patch) — replaces usage of EnvelopeVersion with ProtocolVersion in notifications for Whisper v6
 - [`0014-whisperv6-notifications.patch`](./0014-whisperv6-notifications.patch) — adds Whisper v6 notifications (need to be reviewed and documented)
 - [`0015-whisperv6-envelopes-tracing.patch`](./0015-whisperv6-envelopes-tracing.patch) — adds Whisper v6 envelope tracing (need to be reviewed and documented)
+- [`0016-geth-17-use-whisperv6.patch`](./0016-geth-17-use-whisperv6.patch) — changes previous patches to use Whisper v6 instead of Whisper v5
 
 # Updating upstream version
 
