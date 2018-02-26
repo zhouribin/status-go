@@ -23,6 +23,7 @@ import (
 	"fmt"
 	"math"
 	"math/big"
+	"os"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -405,7 +406,9 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.Int) (err error) {
 	d.mux.Post(StartEvent{})
 	d.downloads.Add(1)
+	fmt.Fprintf(os.Stderr, "IGORM, +1")
 	defer func() {
+		fmt.Fprintf(os.Stderr, "IGORM, -1")
 		d.downloads.Done()
 		// reset on error
 		if err != nil {
@@ -557,7 +560,10 @@ func (d *Downloader) Terminate() {
 	// Wait for the current downloads to complete, so we don't let the
 	// other resources (that we might depend on) to be freed too quickly.
 	// e.g. the DB.
+
+	fmt.Fprintf(os.Stderr, "IGORM, before-wait")
 	d.downloads.Wait()
+	fmt.Fprintf(os.Stderr, "IGORM, after-wait")
 }
 
 // fetchHeight retrieves the head header of the remote peer to aid in estimating
