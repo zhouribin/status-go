@@ -249,6 +249,8 @@ func (pm *ProtocolManager) Stop() {
 	// Wait for any process action
 	pm.wg.Wait()
 
+	pm.downloader.WaitDownloads()
+
 	log.Info("Light Ethereum protocol stopped")
 }
 

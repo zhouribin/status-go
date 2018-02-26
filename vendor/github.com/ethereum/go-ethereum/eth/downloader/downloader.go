@@ -556,14 +556,10 @@ func (d *Downloader) Terminate() {
 
 	// Cancel any pending download requests
 	d.Cancel()
+}
 
-	// Wait for the current downloads to complete, so we don't let the
-	// other resources (that we might depend on) to be freed too quickly.
-	// e.g. the DB.
-
-	fmt.Fprintf(os.Stderr, "IGORM, before-wait")
+func (d *Downloader) WaitDownloads() {
 	d.downloads.Wait()
-	fmt.Fprintf(os.Stderr, "IGORM, after-wait")
 }
 
 // fetchHeight retrieves the head header of the remote peer to aid in estimating
