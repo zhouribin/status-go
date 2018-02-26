@@ -146,6 +146,8 @@ type Downloader struct {
 	quitCh   chan struct{} // Quit channel to signal termination
 	quitLock sync.RWMutex  // Lock to prevent double closes
 
+	downloads sync.WaitGroup
+
 	// Testing hooks
 	syncInitHook     func(uint64, uint64)  // Method to call upon initiating a new sync run
 	bodyFetchHook    func([]*types.Header) // Method to call upon starting a block body fetch
@@ -401,7 +403,9 @@ func (d *Downloader) synchronise(id string, hash common.Hash, td *big.Int, mode 
 // specified peer and head hash.
 func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.Int) (err error) {
 	d.mux.Post(StartEvent{})
+	d.downloads.Add(1)
 	defer func() {
+		d.downloads.Done()
 		// reset on error
 		if err != nil {
 			d.mux.Post(FailedEvent{err})
@@ -548,6 +552,11 @@ func (d *Downloader) Terminate() {
 
 	// Cancel any pending download requests
 	d.Cancel()
+
+	// Wait for the current downloads to complete, so we don't let the
+	// other resources (that we might depend on) to be freed too quickly.
+	// e.g. the DB.
+	d.downloads.Wait()
 }
 
 // fetchHeight retrieves the head header of the remote peer to aid in estimating
