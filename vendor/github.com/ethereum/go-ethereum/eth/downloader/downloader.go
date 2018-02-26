@@ -147,7 +147,7 @@ type Downloader struct {
 	quitCh   chan struct{} // Quit channel to signal termination
 	quitLock sync.RWMutex  // Lock to prevent double closes
 
-	downloads *sync.WaitGroup
+	downloads sync.WaitGroup
 
 	// Testing hooks
 	syncInitHook     func(uint64, uint64)  // Method to call upon initiating a new sync run
@@ -230,7 +230,6 @@ func New(mode SyncMode, stateDb ethdb.Database, mux *event.TypeMux, chain BlockC
 		stateCh:        make(chan dataPack),
 		stateSyncStart: make(chan *stateSync),
 		trackStateReq:  make(chan *stateReq),
-		downloads:      &sync.WaitGroup{},
 	}
 	go dl.qosTuner()
 	go dl.stateFetcher()
