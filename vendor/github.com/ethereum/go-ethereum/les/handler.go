@@ -246,10 +246,10 @@ func (pm *ProtocolManager) Stop() {
 	// will exit when they try to register.
 	pm.peers.Close()
 
+	pm.downloader.Terminate()
+
 	// Wait for any process action
 	pm.wg.Wait()
-
-	pm.downloader.WaitDownloads()
 
 	log.Info("Light Ethereum protocol stopped")
 }
