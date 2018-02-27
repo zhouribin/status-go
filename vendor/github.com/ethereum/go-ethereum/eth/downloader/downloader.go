@@ -539,8 +539,6 @@ func (d *Downloader) Cancel() {
 		}
 	}
 	d.cancelLock.Unlock()
-	// Wait for the running downloads to be complete.
-	d.downloads.Wait()
 }
 
 // Terminate interrupts the downloader, canceling all pending operations.
@@ -557,6 +555,9 @@ func (d *Downloader) Terminate() {
 
 	// Cancel any pending download requests
 	d.Cancel()
+
+	// Wait for the running downloads to be complete.
+	d.downloads.Wait()
 }
 
 // fetchHeight retrieves the head header of the remote peer to aid in estimating
