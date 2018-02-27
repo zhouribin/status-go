@@ -343,6 +343,7 @@ func (s *WhisperJailTestSuite) TestJailWhisper() {
 			payload, err := cell.Get("payload")
 			r.NoError(err, "cannot get payload")
 
+			log.Warn(fmt.Sprintf("Filter is getting messages: %v\n", filterID.String()))
 			messages, err := s.WhisperAPI.GetFilterMessages(filterID.String())
 			r.NoError(err)
 
