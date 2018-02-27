@@ -12,12 +12,6 @@ install:
 - make dep-install
 jobs:
   include:
-  - stage: Lint
-    script: make lint
-  - stage: Vendor Check
-    script: make vendor-check
-  - stage: Test unit and integration
-    script: make test-unit-coverage
   - stage: Test e2e on private network
     script: make test-e2e
   - stage: Test e2e on public network

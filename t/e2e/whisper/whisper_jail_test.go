@@ -4,9 +4,11 @@ import (
 	"testing"
 	"time"
 
+	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/status-im/status-go/geth/common"
+	"github.com/status-im/status-go/geth/log"
 	"github.com/status-im/status-go/static"
 	e2e "github.com/status-im/status-go/t/e2e"
 	. "github.com/status-im/status-go/t/utils"
@@ -334,6 +336,7 @@ func (s *WhisperJailTestSuite) TestJailWhisper() {
 
 			// FilterID is not assigned yet.
 			if filterID.IsNull() {
+				log.Warn(fmt.Sprintf("Filter %v doesn't assigned yet\n", filterID.String()))
 				continue
 			}
 
@@ -344,6 +347,7 @@ func (s *WhisperJailTestSuite) TestJailWhisper() {
 			r.NoError(err)
 
 			for _, m := range messages {
+				log.Warn(fmt.Sprintf("Filter got a message: %v\n", filterID.String()))
 				r.Equal(payload.String(), string(m.Payload))
 				close(done)
 			}
