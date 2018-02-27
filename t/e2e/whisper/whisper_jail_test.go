@@ -288,6 +288,7 @@ func (s *WhisperJailTestSuite) TestJailWhisper() {
 	`
 
 	for _, tc := range testCases {
+		log.Warn(fmt.Sprintf("! Test case started: %v\n", tc.name))
 		chatID := crypto.Keccak256Hash([]byte(tc.name)).Hex()
 
 		s.Jail.CreateAndInitCell(chatID, makeTopicCode)
@@ -347,6 +348,7 @@ func (s *WhisperJailTestSuite) TestJailWhisper() {
 			messages, err := s.WhisperAPI.GetFilterMessages(filterID.String())
 			r.NoError(err)
 
+			log.Warn(fmt.Sprintf("Got %v messages\n", len(messages)))
 			for _, m := range messages {
 				log.Warn(fmt.Sprintf("Filter got a message: %v\n", filterID.String()))
 				r.Equal(payload.String(), string(m.Payload))
