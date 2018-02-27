@@ -540,7 +540,7 @@ func (d *Downloader) Cancel() {
 	}
 	d.cancelLock.Unlock()
 	// Wait for the running downloads to be complete.
-	d.downloads.Wait()
+	//d.downloads.Wait()
 }
 
 // Terminate interrupts the downloader, canceling all pending operations.
