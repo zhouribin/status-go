@@ -62,9 +62,10 @@ func (s *WhisperJailTestSuite) AddKeyPair(address, password string) (string, err
 }
 
 func (s *WhisperJailTestSuite) TestJailWhisper() {
-	addr, err := GetRemoteURL()
-	s.NoError(err)
-	s.StartTestBackend(e2e.WithUpstream(addr))
+	//addr, err := GetRemoteURL()
+	//s.NoError(err)
+	//s.StartTestBackend(e2e.WithUpstream(addr))
+	s.StartTestBackend()
 	defer s.StopTestBackend()
 
 	r := s.Require()
@@ -351,17 +352,21 @@ func (s *WhisperJailTestSuite) TestJailWhisper() {
 			}
 
 			envs := s.WhisperService().Envelopes()
-			log.Warn(fmt.Sprintf("Got %v envelops\n", len(envs)))
+			if len(envs) != 0 {
+				log.Warn(fmt.Sprintf("Got %v envelops\n", len(envs)))
 
-			for _, e := range envs {
-				log.Warn(fmt.Sprintf("Got envelop: %v\n", e.Topic.String()))
+				for _, e := range envs {
+					log.Warn(fmt.Sprintf("Got envelop: %v\n", e.Topic.String()))
+				}
 			}
 
 			msgs := filterFromService.Messages
-			log.Warn(fmt.Sprintf("Got %v messages\n", len(msgs)))
+			if len(msgs) != 0 {
+				log.Warn(fmt.Sprintf("Got %v messages\n", len(msgs)))
 
-			for _, m := range msgs {
-				log.Warn(fmt.Sprintf("Got message: %v\n", m.Topic.String()))
+				for _, m := range msgs {
+					log.Warn(fmt.Sprintf("Got message: %v\n", m.Topic.String()))
+				}
 			}
 
 			messages, err := s.WhisperAPI.GetFilterMessages(filterID.String())
