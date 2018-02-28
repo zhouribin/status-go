@@ -145,9 +145,9 @@ test-e2e: ##@tests Run e2e tests
 	go test -timeout 5m ./t/e2e/accounts/... -network=$(networkid)
 	go test -timeout 5m ./t/e2e/api/... -network=$(networkid)
 	go test -timeout 5m ./t/e2e/node/... -network=$(networkid)
-	go test -timeout 50m ./t/e2e/jail/... -network=$(networkid)
+	go test -v -timeout 50m ./t/e2e/jail/... -network=$(networkid)
 	go test -timeout 20m ./t/e2e/rpc/... -network=$(networkid)
-	go test -timeout 20m ./t/e2e/whisper/... -network=$(networkid)
+	go test  -v -timeout 20m ./t/e2e/whisper/... -network=$(networkid)
 	go test -timeout 10m ./t/e2e/transactions/... -network=$(networkid)
 	# e2e_test tag is required to include some files from ./lib without _test suffix
 	go test -timeout 40m -tags e2e_test ./lib -network=$(networkid)
