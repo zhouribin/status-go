@@ -331,7 +331,7 @@ func (s *WhisperJailTestSuite) TestJailWhisper() {
 				break poll_loop
 			case <-timedOut:
 				s.FailNow("polling for messages timed out. Test case: " + tc.name)
-			case <-time.After(5 * time.Second):
+			case <-time.After(time.Second):
 			}
 
 			// FilterID is not assigned yet.
