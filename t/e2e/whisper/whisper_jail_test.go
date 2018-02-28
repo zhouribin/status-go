@@ -13,6 +13,7 @@ import (
 	e2e "github.com/status-im/status-go/t/e2e"
 	. "github.com/status-im/status-go/t/utils"
 	"github.com/stretchr/testify/suite"
+	"runtime"
 )
 
 const (
@@ -67,6 +68,8 @@ func (s *WhisperJailTestSuite) TestJailWhisper() {
 	//s.StartTestBackend(e2e.WithUpstream(addr))
 	s.StartTestBackend()
 	defer s.StopTestBackend()
+
+	s.T().Log("NumCPU", runtime.NumCPU())
 
 	r := s.Require()
 
