@@ -68,6 +68,7 @@ func (s *WhisperJailTestSuite) TestJailWhisper() {
 	//s.StartTestBackend(e2e.WithUpstream(addr))
 	s.StartTestBackend()
 	defer s.StopTestBackend()
+
 	runtime.GOMAXPROCS(2)
 	log.Warn(fmt.Sprintf("NumCPU:%v", runtime.NumCPU()))
 
