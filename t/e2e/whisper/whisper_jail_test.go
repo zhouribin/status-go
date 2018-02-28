@@ -330,7 +330,10 @@ func (s *WhisperJailTestSuite) TestJailWhisper() {
 			filterID, err := cell.GetObjectValue(filter, "filterId")
 			r.NoError(err, "cannot get filterId")
 
-			log.Warn(fmt.Sprintf("!!! Test %v. Filter %v", tc.name, filterID.String()))
+			topic, err := cell.Get("topic")
+			r.NoError(err, "cannot get topic")
+
+			log.Warn(fmt.Sprintf("!!! Test %v. Filter %v. Topic %v.", tc.name, filterID.String(), topic.String()))
 
 			select {
 			case <-done:
@@ -383,5 +386,7 @@ func (s *WhisperJailTestSuite) TestJailWhisper() {
 				close(done)
 			}
 		}
+
+		log.Warn(fmt.Sprintf("!!! Test %v. END !!!!!!", tc.name))
 	}
 }

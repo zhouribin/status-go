@@ -35,7 +35,7 @@ type Manager struct {
 	completionTimeout time.Duration
 	rpcCallTimeout    time.Duration
 
-	addrLock   *AddrLocker
+	addrLock *AddrLocker
 	//localNonce sync.Map
 }
 
