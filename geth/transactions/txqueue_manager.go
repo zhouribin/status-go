@@ -3,7 +3,7 @@ package transactions
 import (
 	"context"
 	"math/big"
-	"sync"
+	//"sync"
 	"time"
 
 	ethereum "github.com/ethereum/go-ethereum"
@@ -36,7 +36,7 @@ type Manager struct {
 	rpcCallTimeout    time.Duration
 
 	addrLock   *AddrLocker
-	localNonce sync.Map
+	//localNonce sync.Map
 }
 
 // NewManager returns a new Manager.
@@ -49,7 +49,7 @@ func NewManager(nodeManager common.NodeManager, accountManager common.AccountMan
 		notify:            true,
 		completionTimeout: DefaultTxSendCompletionTimeout,
 		rpcCallTimeout:    defaultTimeout,
-		localNonce:        sync.Map{},
+		//localNonce:        sync.Map{},
 	}
 }
 
@@ -171,15 +171,15 @@ func (m *Manager) completeTransaction(config *params.NodeConfig, selectedAccount
 	log.Info("complete transaction", "id", queuedTx.ID)
 	m.addrLock.LockAddr(queuedTx.Args.From)
 	var localNonce uint64
-	if val, ok := m.localNonce.Load(queuedTx.Args.From); ok {
-		localNonce = val.(uint64)
-	}
+	//if val, ok := m.localNonce.Load(queuedTx.Args.From); ok {
+	//	localNonce = val.(uint64)
+	//}
 	var nonce uint64
 	defer func() {
 		// nonce should be incremented only if tx completed without error
 		// if upstream node returned nonce higher than ours we will stick to it
 		if err == nil {
-			m.localNonce.Store(queuedTx.Args.From, nonce+1)
+			//m.localNonce.Store(queuedTx.Args.From, nonce+1)
 		}
 		m.addrLock.UnlockAddr(queuedTx.Args.From)
 

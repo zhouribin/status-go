@@ -25,6 +25,7 @@ import (
 	"runtime"
 	"sync"
 	"time"
+	"strconv"
 
 	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/crypto"
@@ -820,6 +821,19 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 // whisper network. It also inserts the envelope into the expiration pool at the
 // appropriate time-stamp. In case of error, connection should be dropped.
 func (whisper *Whisper) add(envelope *Envelope) (bool, error) {
+	log.Warn("received envelop: " + envelope.Topic.String())
+	whisper.filters.mutex.RLock()
+	log.Warn("whisper.filters.watchers: " + strconv.Itoa(len(whisper.filters.watchers)))
+	log.Warn(strconv.Itoa(len(whisper.filters.watchers)))
+	for i,j:=range whisper.filters.watchers {
+		log.Warn("whisper.filters.watchers :", i)
+		for i:=range j.Topics {
+			a:=BytesToTopic(j.Topics[i])
+			log.Warn("Topic: ", a.String())
+		}
+	}
+	whisper.filters.mutex.RUnlock()
+
 	now := uint32(time.Now().Unix())
 	sent := envelope.Expiry - envelope.TTL
 
@@ -844,6 +858,8 @@ func (whisper *Whisper) add(envelope *Envelope) (bool, error) {
 	}
 
 	if envelope.PoW() < whisper.MinPow() {
+		log.Warn("envelope.PoW() < whisper.MinPow()")
+
 		// maybe the value was recently changed, and the peers did not adjust yet.
 		// in this case the previous value is retrieved by MinPowTolerance()
 		// for a short period of peer synchronization.
@@ -853,6 +869,8 @@ func (whisper *Whisper) add(envelope *Envelope) (bool, error) {
 	}
 
 	if !bloomFilterMatch(whisper.BloomFilter(), envelope.Bloom()) {
+		log.Warn("!bloomFilterMatch(whisper.BloomFilter(), envelope.Bloom())")
+
 		// maybe the value was recently changed, and the peers did not adjust yet.
 		// in this case the previous value is retrieved by BloomFilterTolerance()
 		// for a short period of peer synchronization.

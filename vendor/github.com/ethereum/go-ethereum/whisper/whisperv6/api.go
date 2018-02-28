@@ -597,10 +597,12 @@ func (api *PublicWhisperAPI) NewMessageFilter(req Criteria) (string, error) {
 		Messages: make(map[common.Hash]*ReceivedMessage),
 	}
 
+	log.Warn("before api.w.Subscribe")
 	id, err := api.w.Subscribe(f)
 	if err != nil {
 		return "", err
 	}
+	log.Warn("after api.w.Subscribe")
 
 	api.mu.Lock()
 	api.lastUsed[id] = time.Now()
