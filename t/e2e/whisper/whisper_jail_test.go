@@ -62,7 +62,9 @@ func (s *WhisperJailTestSuite) AddKeyPair(address, password string) (string, err
 }
 
 func (s *WhisperJailTestSuite) TestJailWhisper() {
-	s.StartTestBackend()
+	addr, err := GetRemoteURL()
+	s.NoError(err)
+	s.StartTestBackend(e2e.WithUpstream(addr))
 	defer s.StopTestBackend()
 
 	r := s.Require()
