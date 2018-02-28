@@ -4,9 +4,11 @@ import (
 	"testing"
 	"time"
 
+	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/status-im/status-go/geth/common"
+	"github.com/status-im/status-go/geth/log"
 	"github.com/status-im/status-go/static"
 	e2e "github.com/status-im/status-go/t/e2e"
 	. "github.com/status-im/status-go/t/utils"
@@ -329,7 +331,7 @@ func (s *WhisperJailTestSuite) TestJailWhisper() {
 				break poll_loop
 			case <-timedOut:
 				s.FailNow("polling for messages timed out. Test case: " + tc.name)
-			case <-time.After(time.Second):
+			case <-time.After(5 * time.Second):
 			}
 
 			// FilterID is not assigned yet.
@@ -339,6 +341,26 @@ func (s *WhisperJailTestSuite) TestJailWhisper() {
 
 			payload, err := cell.Get("payload")
 			r.NoError(err, "cannot get payload")
+
+			filterFromService := s.WhisperService().GetFilter(filterID.String())
+
+			if filterFromService == nil {
+				r.FailNow("Filter is nil", filterID.String())
+			}
+
+			envs := s.WhisperService().Envelopes()
+			log.Warn(fmt.Sprintf("Got %v envelops\n", len(envs)))
+
+			for _, e := range envs {
+				log.Warn(fmt.Sprintf("Got envelop: %v\n", e.Topic.String()))
+			}
+
+			msgs := filterFromService.Messages
+			log.Warn(fmt.Sprintf("Got %v messages\n", len(msgs)))
+
+			for _, m := range msgs {
+				log.Warn(fmt.Sprintf("Got message: %v\n", m.Topic.String()))
+			}
 
 			messages, err := s.WhisperAPI.GetFilterMessages(filterID.String())
 			r.NoError(err)
