@@ -329,6 +329,8 @@ func (s *WhisperJailTestSuite) TestJailWhisper() {
 			filterID, err := cell.GetObjectValue(filter, "filterId")
 			r.NoError(err, "cannot get filterId")
 
+			log.Warn(fmt.Sprintf("!!! Test %v. Filter %v", tc.name, filterID.String()))
+
 			select {
 			case <-done:
 				ok, err := s.WhisperAPI.DeleteMessageFilter(filterID.String())
@@ -356,19 +358,19 @@ func (s *WhisperJailTestSuite) TestJailWhisper() {
 
 			envs := s.WhisperService().Envelopes()
 			if len(envs) != 0 {
-				log.Warn(fmt.Sprintf("Got %v envelops\n", len(envs)))
+				log.Warn(fmt.Sprintf("Got %v envelops", len(envs)))
 
 				for _, e := range envs {
-					log.Warn(fmt.Sprintf("Got envelop: %v\n", e.Topic.String()))
+					log.Warn(fmt.Sprintf("Got envelop: %v", e.Topic.String()))
 				}
 			}
 
 			msgs := filterFromService.Messages
 			if len(msgs) != 0 {
-				log.Warn(fmt.Sprintf("Got %v messages\n", len(msgs)))
+				log.Warn(fmt.Sprintf("Got %v messages", len(msgs)))
 
 				for _, m := range msgs {
-					log.Warn(fmt.Sprintf("Got message: %v\n", m.Topic.String()))
+					log.Warn(fmt.Sprintf("Got message: %v", m.Topic.String()))
 				}
 			}
 
