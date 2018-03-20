@@ -241,6 +241,5 @@ func (b *StatusBackend) ConnectionChange(state ConnectionState) {
 func (b *StatusBackend) AppStateChange(state AppState) {
 	log.Info("App State changed.", "new-state", state)
 
-	// TODO: put node in low-power mode if the app is in background (or inactive)
-	// and normal mode if the app is in foreground.
+	b.NodeManager().SetSleepMode(state == AppStateBackground)
 }

@@ -451,3 +451,7 @@ func (m *NodeManager) ensureSync(ctx context.Context) error {
 		}
 	}
 }
+
+func (m *NodeManager) SetSleepMode(sleep bool) {
+	log.Info("wow, sleep mode!")
+}
