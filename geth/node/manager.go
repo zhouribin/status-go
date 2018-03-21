@@ -460,24 +460,29 @@ func (m *NodeManager) SetSleepMode(sleep bool) {
 		err = m.node.Stop()
 	} else {
 		err = m.node.Start()
+		if err := m.node.Service(&m.whisperService); err != nil {
+			log.Warn("Cannot obtain whisper service", "error", err)
+			return
+		}
 		m.restoreWhisperSettings()
 	}
 
 	log.Info(fmt.Sprintf("node stop/start result: err: %v", err))
 }
 
-// TASK: move somewhere else
-var fsBackup map[string]*whisper.Filter
-
 func (m *NodeManager) backupWhisperSettings() {
-	// TASK (igorm): store all whisper filters there
-	fsBackup = m.whisperService.GetFilters().All()
+	m.whisperService.Backup()
+	log.Warn(fmt.Sprintf("IGORM Whisper state before:\n%+v\n*****\n", m.whisperService))
 }
 
 func (m *NodeManager) restoreWhisperSettings() {
 	// TASK (igorm): restore all whisper filters there
-	for id, filter := range fsBackup {
-		// TASK (igorm): how to restore IDs?
-		m.whisperService.Subscribe(filter)
-	}
+	m.whisperService.Restore()
+	log.Warn(fmt.Sprintf("IGORM Whisper state after:\n%+v\n******\n", m.whisperService))
+	// populate static peers exits when node stopped
+	go func() {
+		if err := m.PopulateStaticPeers(); err != nil {
+			log.Error("Static peers population", "error", err)
+		}
+	}()
 }

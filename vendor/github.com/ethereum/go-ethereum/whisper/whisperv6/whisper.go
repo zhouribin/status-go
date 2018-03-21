@@ -624,9 +624,25 @@ func (whisper *Whisper) Subscribe(f *Filter) (string, error) {
 	return s, err
 }
 
+var fs *Filters
+var pk map[string]*ecdsa.PrivateKey // Private key storage
+var sk map[string][]byte            // Symmetric key storage
+
 // TASK (igorm): do we really need this?
-func (whisper *Whisper) GetFilters() *Filters {
-	return whisper.filters
+func (whisper *Whisper) Backup() {
+	fs = whisper.filters
+	pk = whisper.privateKeys
+	sk = whisper.symKeys
+}
+
+// TASK (igorm): do we really need this?
+func (whisper *Whisper) Restore() {
+	whisper.privateKeys = pk
+	whisper.symKeys = sk
+	whisper.filters = fs
+	for _, f := range fs.All() {
+		whisper.updateBloomFilter(f)
+	}
 }
 
 // updateBloomFilter recalculates the new value of bloom filter,
