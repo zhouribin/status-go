@@ -55,6 +55,12 @@ func NewFilters(w *Whisper) *Filters {
 	}
 }
 
+// TASK: not a good place to do something like that
+func (fs *Filters) All() map[string]*Filter {
+	// TASK: at least, make a copy
+	return fs.watchers
+}
+
 // Install will add a new filter to the filter collection
 func (fs *Filters) Install(watcher *Filter) (string, error) {
 	if watcher.KeySym != nil && watcher.KeyAsym != nil {

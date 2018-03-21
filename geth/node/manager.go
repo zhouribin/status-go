@@ -454,4 +454,30 @@ func (m *NodeManager) ensureSync(ctx context.Context) error {
 
 func (m *NodeManager) SetSleepMode(sleep bool) {
 	log.Info("wow, sleep mode!")
+	var err error
+	if sleep {
+		m.backupWhisperSettings()
+		err = m.node.Stop()
+	} else {
+		err = m.node.Start()
+		m.restoreWhisperSettings()
+	}
+
+	log.Info(fmt.Sprintf("node stop/start result: err: %v", err))
+}
+
+// TASK: move somewhere else
+var fsBackup map[string]*whisper.Filter
+
+func (m *NodeManager) backupWhisperSettings() {
+	// TASK (igorm): store all whisper filters there
+	fsBackup = m.whisperService.GetFilters().All()
+}
+
+func (m *NodeManager) restoreWhisperSettings() {
+	// TASK (igorm): restore all whisper filters there
+	for id, filter := range fsBackup {
+		// TASK (igorm): how to restore IDs?
+		m.whisperService.Subscribe(filter)
+	}
 }

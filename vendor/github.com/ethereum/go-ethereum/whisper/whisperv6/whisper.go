@@ -85,8 +85,8 @@ type Whisper struct {
 	statsMu sync.Mutex // guard stats
 	stats   Statistics // Statistics of whisper node
 
-	mailServer         MailServer // MailServer interface
-	envelopeTracer     EnvelopeTracer // Service collecting envelopes metadata
+	mailServer     MailServer     // MailServer interface
+	envelopeTracer EnvelopeTracer // Service collecting envelopes metadata
 }
 
 // New creates a Whisper client ready to communicate through the Ethereum P2P network.
@@ -622,6 +622,11 @@ func (whisper *Whisper) Subscribe(f *Filter) (string, error) {
 		whisper.updateBloomFilter(f)
 	}
 	return s, err
+}
+
+// TASK (igorm): do we really need this?
+func (whisper *Whisper) GetFilters() *Filters {
+	return whisper.filters
 }
 
 // updateBloomFilter recalculates the new value of bloom filter,
