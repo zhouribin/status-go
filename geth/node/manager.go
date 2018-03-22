@@ -454,6 +454,14 @@ func (m *NodeManager) ensureSync(ctx context.Context) error {
 
 func (m *NodeManager) SetSleepMode(sleep bool) {
 	log.Info("wow, sleep mode!")
+
+	m.mu.RLock()
+	defer m.mu.RUnlock()
+
+	if m.node == nil || m.whisperService == nil {
+		return
+	}
+
 	var err error
 	if sleep {
 		m.backupWhisperSettings()
