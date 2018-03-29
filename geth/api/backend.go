@@ -269,7 +269,14 @@ func (b *StatusBackend) registerHandlers() error {
 	rpcClient.RegisterHandler("eth_accounts", func(context.Context, ...interface{}) (interface{}, error) {
 		return b.AccountManager().Accounts()
 	})
-	rpcClient.RegisterHandler("eth_sendTransaction", b.txQueueManager.SendTransactionRPCHandler)
+	rpcClient.RegisterHandler("eth_sendTransaction", func(ctx context.Context, args ...interface{}) (interface{}, error) {
+		acc, err := b.AccountManager().SelectedAccount()
+		if err != nil {
+			fmt.Println("No selected account!")
+			return nil, err
+		}
+		return b.txQueueManager.SendTransactionRPCHandler(ctx, acc, args...)
+	})
 	return nil
 }
 

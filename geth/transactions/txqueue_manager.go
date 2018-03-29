@@ -2,6 +2,7 @@ package transactions
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -89,6 +90,7 @@ func (m *Manager) TransactionQueue() *queue.TxQueue {
 
 // QueueTransaction puts a transaction into the queue.
 func (m *Manager) QueueTransaction(tx *common.QueuedTx) error {
+	fmt.Println("IGORM: Queueing TX", tx)
 	if !tx.Args.Valid() {
 		return common.ErrInvalidSendTxArgs
 	}
@@ -103,6 +105,8 @@ func (m *Manager) QueueTransaction(tx *common.QueuedTx) error {
 	if m.notify {
 		NotifyOnEnqueue(tx)
 	}
+
+	fmt.Println("IGORM: ENQUEUED TX", tx)
 	return nil
 }
 
@@ -151,6 +155,8 @@ func (m *Manager) NotifyErrored(id common.QueuedTxID, inputError error) error {
 
 // CompleteTransaction instructs backend to complete sending of a given transaction.
 func (m *Manager) CompleteTransaction(id common.QueuedTxID, account *account.SelectedExtKey) (hash gethcommon.Hash, err error) {
+	fmt.Println("COMPLETE TX")
+	defer fmt.Println("ENDOF COMPLETE TX", err)
 	m.log.Info("complete transaction", "id", id)
 	tx, err := m.txQueue.Get(id)
 	if err != nil {
@@ -188,6 +194,7 @@ func (m *Manager) validateAccount(tx *common.QueuedTx, selectedAccount *account.
 }
 
 func (m *Manager) completeTransaction(selectedAccount *account.SelectedExtKey, queuedTx *common.QueuedTx) (hash gethcommon.Hash, err error) {
+	fmt.Println("wow, complete!")
 	m.log.Info("complete transaction", "id", queuedTx.ID)
 	m.addrLock.LockAddr(queuedTx.Args.From)
 	var localNonce uint64
@@ -310,16 +317,23 @@ func (m *Manager) DiscardTransactions(ids []common.QueuedTxID) map[common.Queued
 
 // SendTransactionRPCHandler is a handler for eth_sendTransaction method.
 // It accepts one param which is a slice with a map of transaction params.
-func (m *Manager) SendTransactionRPCHandler(ctx context.Context, args ...interface{}) (interface{}, error) {
+func (m *Manager) SendTransactionRPCHandler(ctx context.Context, acc *account.SelectedExtKey, args ...interface{}) (interface{}, error) {
 	m.log.Info("SendTransactionRPCHandler called")
 	// TODO(adam): it's a hack to parse arguments as common.RPCCall can do that.
 	// We should refactor parsing these params to a separate struct.
+	fmt.Println("IGORM SEND TX RPC HANDLER", args)
 	rpcCall := common.RPCCall{Params: args}
 	tx := common.CreateTransaction(ctx, rpcCall.ToSendTxArgs())
+	fmt.Println("IGORM CREATED TX", tx)
+	fmt.Println("IGORM TRYNING TO ENQUEUE", m)
+
 	if err := m.QueueTransaction(tx); err != nil {
 		return nil, err
 	}
+	go m.CompleteTransaction(tx.ID, acc)
+	fmt.Println("ENQUEUED TX")
 	rst := m.WaitForTransaction(tx)
+	fmt.Println("GOT RESULT", rst)
 	if rst.Error != nil {
 		return nil, rst.Error
 	}
