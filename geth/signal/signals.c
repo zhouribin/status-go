@@ -197,6 +197,29 @@ bool StatusServiceSignalEvent(const char *jsonEvent) {
 }
 
 #else
+
+
+#include <stdio.h>
+#include <stddef.h>
+#include <stdbool.h>
+#include "_cgo_export.h"
+
+typedef void (*callback)(const char *jsonEvent);
+callback gCallback = 0;
+
+bool StatusServiceSignalEvent(const char *jsonEvent) {
+    if (gCallback) {
+        gCallback(jsonEvent);
+    }
+
+    return true;
+}
+
+void SetJailSignalCb(void* cb) {
+    gCallback = (callback)cb;
+}
+
+/*
 // ======================================================================================
 // cgo compilation (for local tests)
 // ======================================================================================
@@ -210,6 +233,6 @@ bool StatusServiceSignalEvent(const char *jsonEvent) {
     NotifyNode((char *)jsonEvent); // re-send notification back to status node
 
 	return true;
-}
+}*/
 
 #endif

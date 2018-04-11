@@ -2,6 +2,7 @@ package main
 
 import "C"
 import (
+	"unsafe"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -11,6 +12,7 @@ import (
 	"github.com/status-im/status-go/geth/params"
 	"github.com/status-im/status-go/profiling"
 	"gopkg.in/go-playground/validator.v9"
+	"github.com/status-im/status-go/geth/signal"
 )
 
 // All general log messages in this package should be routed through this logger.
@@ -460,4 +462,10 @@ func ConnectionChange(typ *C.char, expensive C.int) {
 //export AppStateChange
 func AppStateChange(state *C.char) {
 	statusAPI.AppStateChange(C.GoString(state))
+}
+
+//SetJailSignalCallback setup geth callback to notify about new jail signal
+//export SetJailSignalCallback
+func SetJailSignalCallback(cb unsafe.Pointer) {
+	signal.SetJailSignalCallback(cb)
 }
