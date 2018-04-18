@@ -2,6 +2,7 @@ package transactions
 
 import (
 	"context"
+	"fmt"
 	"math/big"
 	"sync"
 	"time"
@@ -73,6 +74,7 @@ func (t *Transactor) SendTransaction(ctx context.Context, args SendTxArgs) (geth
 	}
 
 	completeFunc := func(acc *account.SelectedExtKey, password string) (sign.Response, error) {
+		fmt.Println("got account in completeFunc", acc.Address.Hex())
 		hash, err := t.validateAndPropagate(acc, args)
 		return sign.Response(hash.Bytes()), err
 	}
@@ -92,6 +94,8 @@ func (t *Transactor) validateAccount(args SendTxArgs, selectedAccount *account.S
 	if selectedAccount == nil {
 		return account.ErrNoAccountSelected
 	}
+
+	fmt.Println("validate from is ", args.From.Hex(), "acc is:", selectedAccount.Address.Hex())
 
 	if args.From.Hex() != selectedAccount.Address.Hex() {
 		err := sign.NewTransientError(ErrInvalidCompleteTxSender)

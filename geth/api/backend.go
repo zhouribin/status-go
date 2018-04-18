@@ -339,6 +339,7 @@ func (b *StatusBackend) ReSelectAccount() error {
 // using provided password. Once verification is done, decrypted key is injected into Whisper (as a single identity,
 // all previous identities are removed).
 func (b *StatusBackend) SelectAccount(address, password string) error {
+	fmt.Println("selectring new account:", address)
 	err := b.accountManager.SelectAccount(address, password)
 	if err != nil {
 		return err
@@ -357,6 +358,8 @@ func (b *StatusBackend) SelectAccount(address, password string) error {
 	if err != nil {
 		return ErrWhisperIdentityInjectionFailure
 	}
+
+	fmt.Println("selected new account:", address, "->", acc.Address.Hex())
 
 	return nil
 }
