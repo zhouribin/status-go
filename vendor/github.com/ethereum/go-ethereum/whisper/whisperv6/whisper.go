@@ -725,6 +725,30 @@ func (whisper *Whisper) HandlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	return whisper.runMessageLoop(whisperPeer, rw)
 }
 
+// NOTE(oskarth):
+// - Basic DB to check if peer has paid or not
+// - For PoC, do in-memory
+// - Map: Peer ID => paid for N months (date period)
+func hasPaid(p *Peer) bool {
+	return false
+}
+
+// 1. Mail Server needs to provide payment info "Send SNT here" - lets assume this is hardcoded for now
+// 2. Then there has to be a way for client to send, but this happens client side
+// 3. Then Mail Server has to figure out this payment has been sent,
+//    (Listen to payment topic?), and add to hasPaid DB. Ideally confirm with client too.
+// 4. Simplest for now is to do in requestMessages, for MVP. Can listen on txs polling, even etherscan for MVP.
+// Poll https://ropsten.etherscan.io/token/0xc55cf4b03948d7ebc8b9e8bad92643703811d162 and see if tx came through
+// from... peers address?
+
+// How will it know the address? You can send the tx id or URL so person can verify
+// Up to mail server, "is this proof good enough"?
+// proofOfPayment - type and data
+// Example:
+// 'proofOfPayment : {type: takeMyWordForIt, proof: IPaid!}, or etherScan with link, or tx id, etc.
+// Easy to extend.
+
+// XXX(oskarth): Format changes here as a patch file?
 // runMessageLoop reads and processes inbound messages directly to merge into client-global state.
 func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 	for {
@@ -813,6 +837,13 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				if err := packet.Decode(&request); err != nil {
 					log.Warn("failed to decode p2p request message, peer will be disconnected", "peer", p.peer.ID(), "err", err)
 					return errors.New("invalid p2p request")
+				}
+				log.Info("*** XXX: Mail server paid decision time ", "peer", p.peer.ID(), "req", &request)
+				// XXX: Can expand this logic to check envelope / tx id, or do this async
+				// TODO(oskarth): Inspect envelope for proof of payment
+				if !hasPaid(p) {
+					log.Warn("*** peer didn't pay", "peer", p.peer.ID())
+					return errors.New("peer didn't pay")
 				}
 				whisper.mailServer.DeliverMail(p, &request)
 			}
