@@ -623,18 +623,28 @@ func (rw *rlpxFrameRW) WriteMsg(msg Msg) error {
 
 	// write header MAC
 	copy(headbuf[16:], updateMAC(rw.egressMAC, rw.macCipher, headbuf[:16]))
-	if _, err := rw.conn.Write(headbuf); err != nil {
+
+	if bytes, err := rw.conn.Write(headbuf); err != nil {
+		fmt.Println("ATTEMPT WRITE HEADER", time.Now(), len(headbuf), bytes, err)
 		return err
+	} else {
+		fmt.Println("ATTEMPT WRITE HEADER", time.Now(), len(headbuf), bytes)
 	}
 
 	// write encrypted frame, updating the egress MAC hash with
 	// the data written to conn.
 	tee := cipher.StreamWriter{S: rw.enc, W: io.MultiWriter(rw.conn, rw.egressMAC)}
-	if _, err := tee.Write(ptype); err != nil {
+	if bytes, err := tee.Write(ptype); err != nil {
+		fmt.Println("ATTEMPT WRITE PTYPE", time.Now(), len(ptype), bytes, err)
 		return err
+	} else {
+		fmt.Println("ATTEMPT WRITE PTYPE", time.Now(), len(ptype), bytes)
 	}
-	if _, err := io.Copy(tee, msg.Payload); err != nil {
+	if bytes, err := io.Copy(tee, msg.Payload); err != nil {
+		fmt.Println("ATTEMPT WRITE PAYLOAD", time.Now(), bytes, err)
 		return err
+	} else {
+		fmt.Println("ATTEMPT WRITE PAYLOAD", time.Now(), bytes)
 	}
 	if padding := fsize % 16; padding > 0 {
 		if _, err := tee.Write(zero16[:16-padding]); err != nil {

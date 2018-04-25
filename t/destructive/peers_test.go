@@ -2,10 +2,13 @@ package destructive
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
+	"github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/status-im/status-go/geth/api"
 	. "github.com/status-im/status-go/t/utils"
 
@@ -55,6 +58,68 @@ func consumeUntil(events <-chan *p2p.PeerEvent, f func(ev *p2p.PeerEvent) bool, 
 			return errors.New("timeout")
 		}
 	}
+}
+
+func (s *PeersTestSuite) TestSentEnvelope() {
+	node := s.backend.StatusNode()
+	w, err := node.WhisperService()
+	s.NoError(err)
+	events := make(chan whisperv6.EnvelopeEvent, 100)
+	sub := w.SubscribeEnvelopeEvents(events)
+	defer sub.Unsubscribe()
+
+	client, _ := node.GethNode().Attach()
+	s.NotNil(client)
+	var symID string
+	s.NoError(client.Call(&symID, "shh_newSymKey"))
+	msg := whisperv6.NewMessage{
+		SymKeyID:  symID,
+		PowTarget: whisperv6.DefaultMinimumPoW,
+		PowTime:   200,
+		TTL:       1,
+		Topic:     whisperv6.TopicType{0x01, 0x01, 0x01, 0x01},
+		Payload:   []byte("hello"),
+	}
+	stop := make(chan struct{})
+	go func() {
+		ticker := time.NewTicker(3 * time.Second)
+		for {
+			select {
+			case <-stop:
+				return
+			case <-ticker.C:
+				var hash common.Hash
+				s.NoError(client.Call(&hash, "shhext_post", msg))
+				fmt.Println("SEND ENVELOPE", hash)
+			}
+		}
+	}()
+
+	wait := func() {
+		for {
+			select {
+			case ev := <-events:
+				if ev.Event == whisperv6.EventEnvelopeSent {
+					fmt.Println("******* ENVELOPE SENT", ev.Hash)
+					return
+				} else {
+					fmt.Println("****** ENVELOPE EXPIRED", ev.Hash)
+				}
+			}
+		}
+	}
+	wait()
+	go func() {
+		for {
+			select {
+			case ev := <-events:
+				fmt.Println("===", ev.Event, ev.Hash, time.Now())
+			}
+		}
+	}()
+	s.Require().NoError(s.controller.Enable())
+	fmt.Println("---------------- connectivity dropped", time.Now())
+	time.Sleep(120 * time.Second)
 }
 
 // TestStaticPeersReconnect : it tests how long it takes to reconnect with

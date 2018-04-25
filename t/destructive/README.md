@@ -9,5 +9,5 @@ I don't advice to run them locally on your machine, just use docker container.
 Also note that tests are relying on real data, such as number of peers.
 
 ```bash
-make docker-test ARGS="./t/destructive/ -v -network=3"
+make docker-test ARGS="./t/destructive/ -log=PANIC -v -network=4 -testify.m=TestSentEnvelope"
 ```
