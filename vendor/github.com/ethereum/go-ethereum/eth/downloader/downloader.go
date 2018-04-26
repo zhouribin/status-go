@@ -33,6 +33,7 @@ import (
 	"github.com/ethereum/go-ethereum/event"
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/metrics"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/params"
 )
 
@@ -113,7 +114,8 @@ type Downloader struct {
 	blockchain BlockChain
 
 	// Callbacks
-	dropPeer peerDropFn // Drops a peer for misbehaving
+	dropPeer      peerDropFn // Drops a peer for misbehaving
+	IsTrustedPeer func(p discover.NodeID) bool
 
 	// Status
 	synchroniseMock func(id string, hash common.Hash) error // Replacement for synchronise during testing
@@ -135,10 +137,9 @@ type Downloader struct {
 	stateCh        chan dataPack // [eth/63] Channel receiving inbound node state data
 
 	// Cancellation and termination
-	cancelPeer string         // Identifier of the peer currently being used as the master (cancel on drop)
-	cancelCh   chan struct{}  // Channel to cancel mid-flight syncs
-	cancelLock sync.RWMutex   // Lock to protect the cancel channel and peer in delivers
-	cancelWg   sync.WaitGroup // Make sure all fetcher goroutines have exited.
+	cancelPeer string        // Identifier of the peer currently being used as the master (cancel on drop)
+	cancelCh   chan struct{} // Channel to cancel mid-flight syncs
+	cancelLock sync.RWMutex  // Lock to protect the cancel channel and peer in delivers
 
 	quitCh   chan struct{} // Quit channel to signal termination
 	quitLock sync.RWMutex  // Lock to prevent double closes
@@ -308,7 +309,7 @@ func (d *Downloader) UnregisterPeer(id string) error {
 	d.cancelLock.RUnlock()
 
 	if master {
-		d.cancel()
+		d.Cancel()
 	}
 	return nil
 }
@@ -481,11 +482,12 @@ func (d *Downloader) syncWithPeer(p *peerConnection, hash common.Hash, td *big.I
 // spawnSync runs d.process and all given fetcher functions to completion in
 // separate goroutines, returning the first error that appears.
 func (d *Downloader) spawnSync(fetchers []func() error) error {
+	var wg sync.WaitGroup
 	errc := make(chan error, len(fetchers))
-	d.cancelWg.Add(len(fetchers))
+	wg.Add(len(fetchers))
 	for _, fn := range fetchers {
 		fn := fn
-		go func() { defer d.cancelWg.Done(); errc <- fn() }()
+		go func() { defer wg.Done(); errc <- fn() }()
 	}
 	// Wait for the first error, then terminate the others.
 	var err error
@@ -502,13 +504,13 @@ func (d *Downloader) spawnSync(fetchers []func() error) error {
 	}
 	d.queue.Close()
 	d.Cancel()
+	wg.Wait()
 	return err
 }
 
-// cancel aborts all of the operations and resets the queue. However, cancel does
-// not wait for the running download goroutines to finish. This method should be
-// used when cancelling the downloads from inside the downloader.
-func (d *Downloader) cancel() {
+// Cancel cancels all of the operations and resets the queue. It returns true
+// if the cancel operation was completed.
+func (d *Downloader) Cancel() {
 	// Close the current cancel channel
 	d.cancelLock.Lock()
 	if d.cancelCh != nil {
@@ -520,13 +522,6 @@ func (d *Downloader) cancel() {
 		}
 	}
 	d.cancelLock.Unlock()
-}
-
-// Cancel aborts all of the operations and waits for all download goroutines to
-// finish before returning.
-func (d *Downloader) Cancel() {
-	d.cancel()
-	d.cancelWg.Wait()
 }
 
 // Terminate interrupts the downloader, canceling all pending operations.
@@ -1276,6 +1271,10 @@ func (d *Downloader) processHeaders(origin uint64, pivot uint64, td *big.Int) er
 					frequency := fsHeaderCheckFrequency
 					if chunk[len(chunk)-1].Number.Uint64()+uint64(fsHeaderForceVerify) > pivot {
 						frequency = 1
+						//disable validation for trusted peers
+						if d.IsTrustedPeer != nil {
+							frequency = 0
+						}
 					}
 					if n, err := d.lightchain.InsertHeaderChain(chunk, frequency); err != nil {
 						// If some headers were inserted, add them too to the rollback list

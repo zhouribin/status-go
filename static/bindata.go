@@ -101,7 +101,7 @@ func configPublicChainAccountsJson() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "config/public-chain-accounts.json", size: 165, mode: os.FileMode(420), modTime: time.Unix(1521705776, 0)}
+	info := bindataFileInfo{name: "config/public-chain-accounts.json", size: 165, mode: os.FileMode(436), modTime: time.Unix(1513089203, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -121,7 +121,7 @@ func configStatusChainAccountsJson() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "config/status-chain-accounts.json", size: 330, mode: os.FileMode(420), modTime: time.Unix(1521705776, 0)}
+	info := bindataFileInfo{name: "config/status-chain-accounts.json", size: 330, mode: os.FileMode(436), modTime: time.Unix(1513089203, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -141,7 +141,7 @@ func configStatusChainGenesisJson() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "config/status-chain-genesis.json", size: 612, mode: os.FileMode(420), modTime: time.Unix(1521705776, 0)}
+	info := bindataFileInfo{name: "config/status-chain-genesis.json", size: 612, mode: os.FileMode(436), modTime: time.Unix(1513089203, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -161,7 +161,7 @@ func configTestDataJson() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "config/test-data.json", size: 84, mode: os.FileMode(420), modTime: time.Unix(1521705776, 0)}
+	info := bindataFileInfo{name: "config/test-data.json", size: 84, mode: os.FileMode(436), modTime: time.Unix(1513089203, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -181,7 +181,7 @@ func keysBootnodeKey() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "keys/bootnode.key", size: 65, mode: os.FileMode(420), modTime: time.Unix(1521705776, 0)}
+	info := bindataFileInfo{name: "keys/bootnode.key", size: 65, mode: os.FileMode(436), modTime: time.Unix(1517996008, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -201,7 +201,7 @@ func keysFirebaseauthkey() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "keys/firebaseauthkey", size: 153, mode: os.FileMode(420), modTime: time.Unix(1521705776, 0)}
+	info := bindataFileInfo{name: "keys/firebaseauthkey", size: 153, mode: os.FileMode(436), modTime: time.Unix(1507044585, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -221,7 +221,7 @@ func keysTestAccount1StatusChainPk() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "keys/test-account1-status-chain.pk", size: 489, mode: os.FileMode(420), modTime: time.Unix(1521705776, 0)}
+	info := bindataFileInfo{name: "keys/test-account1-status-chain.pk", size: 489, mode: os.FileMode(436), modTime: time.Unix(1513089203, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -241,7 +241,7 @@ func keysTestAccount1Pk() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "keys/test-account1.pk", size: 491, mode: os.FileMode(420), modTime: time.Unix(1521705776, 0)}
+	info := bindataFileInfo{name: "keys/test-account1.pk", size: 491, mode: os.FileMode(436), modTime: time.Unix(1513089203, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -261,7 +261,7 @@ func keysTestAccount2StatusChainPk() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "keys/test-account2-status-chain.pk", size: 489, mode: os.FileMode(420), modTime: time.Unix(1521705776, 0)}
+	info := bindataFileInfo{name: "keys/test-account2-status-chain.pk", size: 489, mode: os.FileMode(436), modTime: time.Unix(1513089203, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -281,7 +281,7 @@ func keysTestAccount2Pk() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "keys/test-account2.pk", size: 491, mode: os.FileMode(420), modTime: time.Unix(1521705776, 0)}
+	info := bindataFileInfo{name: "keys/test-account2.pk", size: 491, mode: os.FileMode(436), modTime: time.Unix(1513089203, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -301,7 +301,7 @@ func keysTestAccount3BeforeEip55Pk() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "keys/test-account3-before-eip55.pk", size: 489, mode: os.FileMode(420), modTime: time.Unix(1521705776, 0)}
+	info := bindataFileInfo{name: "keys/test-account3-before-eip55.pk", size: 489, mode: os.FileMode(436), modTime: time.Unix(1513089203, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -321,7 +321,7 @@ func keysWnodepassword() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "keys/wnodepassword", size: 21, mode: os.FileMode(420), modTime: time.Unix(1521705776, 0)}
+	info := bindataFileInfo{name: "keys/wnodepassword", size: 21, mode: os.FileMode(436), modTime: time.Unix(1517227434, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -341,7 +341,7 @@ func testdataJailCommandsJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "testdata/jail/commands.js", size: 7677, mode: os.FileMode(420), modTime: time.Unix(1522047414, 0)}
+	info := bindataFileInfo{name: "testdata/jail/commands.js", size: 7677, mode: os.FileMode(436), modTime: time.Unix(1507044585, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -361,7 +361,7 @@ func testdataJailStatusJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "testdata/jail/status.js", size: 3402, mode: os.FileMode(420), modTime: time.Unix(1522047414, 0)}
+	info := bindataFileInfo{name: "testdata/jail/status.js", size: 3402, mode: os.FileMode(436), modTime: time.Unix(1507044585, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -381,7 +381,7 @@ func testdataJailTxSendContextNoMessageIdJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "testdata/jail/tx-send/context-no-message-id.js", size: 1793, mode: os.FileMode(420), modTime: time.Unix(1522047414, 0)}
+	info := bindataFileInfo{name: "testdata/jail/tx-send/context-no-message-id.js", size: 1793, mode: os.FileMode(436), modTime: time.Unix(1507044585, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -401,7 +401,7 @@ func testdataJailTxSendMessageIdNoContextJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "testdata/jail/tx-send/message-id-no-context.js", size: 1875, mode: os.FileMode(420), modTime: time.Unix(1522047414, 0)}
+	info := bindataFileInfo{name: "testdata/jail/tx-send/message-id-no-context.js", size: 1875, mode: os.FileMode(436), modTime: time.Unix(1507044585, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -421,7 +421,7 @@ func testdataJailTxSendNoMessageIdOrContextJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "testdata/jail/tx-send/no-message-id-or-context.js", size: 1354, mode: os.FileMode(420), modTime: time.Unix(1522047414, 0)}
+	info := bindataFileInfo{name: "testdata/jail/tx-send/no-message-id-or-context.js", size: 1354, mode: os.FileMode(436), modTime: time.Unix(1507044585, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -441,7 +441,7 @@ func testdataJailTxSendTxSendJs() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "testdata/jail/tx-send/tx-send.js", size: 3343, mode: os.FileMode(420), modTime: time.Unix(1522047414, 0)}
+	info := bindataFileInfo{name: "testdata/jail/tx-send/tx-send.js", size: 3343, mode: os.FileMode(436), modTime: time.Unix(1507822352, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }
@@ -461,7 +461,7 @@ func testdataNodeTestSol() (*asset, error) {
 		return nil, err
 	}
 
-	info := bindataFileInfo{name: "testdata/node/test.sol", size: 119, mode: os.FileMode(420), modTime: time.Unix(1522047414, 0)}
+	info := bindataFileInfo{name: "testdata/node/test.sol", size: 119, mode: os.FileMode(436), modTime: time.Unix(1507044585, 0)}
 	a := &asset{bytes: bytes, info: info}
 	return a, nil
 }

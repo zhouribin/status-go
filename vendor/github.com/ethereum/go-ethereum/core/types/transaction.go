@@ -33,6 +33,7 @@ import (
 
 var (
 	ErrInvalidSig = errors.New("invalid transaction v, r, s values")
+	errNoSigner   = errors.New("missing signing methods")
 )
 
 // deriveSigner makes a *best* guess about which signer to use.

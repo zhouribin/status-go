@@ -80,6 +80,7 @@ var (
 		utils.TxPoolLifetimeFlag,
 		utils.FastSyncFlag,
 		utils.LightModeFlag,
+		utils.ULCModeConfigFlag,
 		utils.SyncModeFlag,
 		utils.GCModeFlag,
 		utils.LightServFlag,
@@ -241,7 +242,7 @@ func startNode(ctx *cli.Context, stack *node.Node) {
 	stack.AccountManager().Subscribe(events)
 
 	go func() {
-		// Create a chain state reader for self-derivation
+		// Create an chain state reader for self-derivation
 		rpcClient, err := stack.Attach()
 		if err != nil {
 			utils.Fatalf("Failed to attach to self: %v", err)
