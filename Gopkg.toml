@@ -1,3 +1,6 @@
+# These packages are introduced by patching go-ethereum, so there isn't any point in forcing dep to find them.
+ignored = [ "github.com/ethereum/go-ethereum/ethapi" ]
+
 [prune]
   unused-packages = true
   go-tests = true
@@ -13,6 +16,7 @@
     unused-packages = false
     non-go = false
 
+
 # * * * * * constrained `status-go` dependencies * * * * *
 # (for the full dependency list see `Gopkg.lock`)
 
@@ -23,7 +27,7 @@
 
 [[constraint]]
   name = "github.com/ethereum/go-ethereum"
-  version = "1.8.1"
+  version = "v1.8.5"
 
 [[constraint]]
   # used only to embed web3js code with particular version
@@ -134,7 +138,7 @@
 
 [[override]]
   name = "github.com/syndtr/goleveldb"
-  revision = "b89cc31ef7977104127d34c1bd31ebd1a9db2199"
+  revision = "34011bf325bce385408353a30b101fe5e923eb6e"
 
 [[constraint]]
   branch = "master"

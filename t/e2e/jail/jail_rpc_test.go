@@ -10,6 +10,7 @@ import (
 	"time"
 
 	gethcommon "github.com/ethereum/go-ethereum/common"
+
 	"github.com/status-im/status-go/geth/jail"
 	"github.com/status-im/status-go/geth/params"
 	"github.com/status-im/status-go/geth/signal"
@@ -36,6 +37,8 @@ func (s *JailRPCTestSuite) SetupTest() {
 }
 
 func (s *JailRPCTestSuite) TestJailRPCSend() {
+	CheckTestSkipForNetworks(s.T(), params.MainNetworkID)
+
 	s.StartTestBackend()
 	defer s.StopTestBackend()
 
@@ -92,7 +95,7 @@ func (s *JailRPCTestSuite) TestIsConnected() {
 	s.True(response)
 }
 
-// regression test: eth_getTransactionReceipt with invalid transaction hash should return "error":{"code":-32000,"message":"unknown transaction"}
+// regression test: eth_getTransactionReceipt with invalid transaction hash should return "result":null.
 func (s *JailRPCTestSuite) TestRegressionGetTransactionReceipt() {
 	s.StartTestBackend()
 	defer s.StopTestBackend()
@@ -102,13 +105,17 @@ func (s *JailRPCTestSuite) TestRegressionGetTransactionReceipt() {
 
 	// note: transaction hash is assumed to be invalid
 	got := rpcClient.CallRaw(`{"jsonrpc":"2.0","method":"eth_getTransactionReceipt","params":["0xbbebf28d0a3a3cbb38e6053a5b21f08f82c62b0c145a17b1c4313cac3f68ae7c"],"id":7}`)
-	expected := `{"jsonrpc":"2.0","id":7,"error":{"code":-32000,"message":"unknown transaction"}}`
+	expected := `{"jsonrpc":"2.0","id":7,"result":null}`
 	s.Equal(expected, got)
 }
 
 func (s *JailRPCTestSuite) TestContractDeployment() {
+	CheckTestSkipForNetworks(s.T(), params.MainNetworkID)
+
 	s.StartTestBackend()
 	defer s.StopTestBackend()
+
+	s.NoError(s.Backend.SelectAccount(TestConfig.Account1.Address, TestConfig.Account1.Password))
 
 	EnsureNodeSync(s.Backend.StatusNode().EnsureSync)
 
@@ -126,16 +133,14 @@ func (s *JailRPCTestSuite) TestContractDeployment() {
 		unmarshalErr := json.Unmarshal([]byte(jsonEvent), &envelope)
 		s.NoError(unmarshalErr, "cannot unmarshal JSON: %s", jsonEvent)
 
-		if envelope.Type == sign.EventTransactionQueued {
+		if envelope.Type == sign.EventSignRequestAdded {
 			event := envelope.Event.(map[string]interface{})
 			s.T().Logf("transaction queued and will be completed shortly, id: %v", event["id"])
 
-			s.NoError(s.Backend.SelectAccount(TestConfig.Account1.Address, TestConfig.Account1.Password))
-
 			txID := event["id"].(string)
-			var txErr error
-			txHash, txErr = s.Backend.CompleteTransaction(txID, TestConfig.Account1.Password)
-			if s.NoError(txErr, event["id"]) {
+			result := s.Backend.ApproveSignRequest(txID, TestConfig.Account1.Password)
+			txHash.SetBytes(result.Response.Bytes())
+			if s.NoError(result.Error, event["id"]) {
 				s.T().Logf("contract transaction complete, URL: %s", "https://ropsten.etherscan.io/tx/"+txHash.Hex())
 			}
 
@@ -190,6 +195,8 @@ func (s *JailRPCTestSuite) TestContractDeployment() {
 }
 
 func (s *JailRPCTestSuite) TestJailVMPersistence() {
+	CheckTestSkipForNetworks(s.T(), params.MainNetworkID)
+
 	s.StartTestBackend()
 	defer s.StopTestBackend()
 
@@ -284,14 +291,16 @@ func (s *JailRPCTestSuite) TestJailVMPersistence() {
 			s.T().Errorf("cannot unmarshal event's JSON: %s", jsonEvent)
 			return
 		}
-		if envelope.Type == sign.EventTransactionQueued {
+		if envelope.Type == sign.EventSignRequestAdded {
 			event := envelope.Event.(map[string]interface{})
 			s.T().Logf("Transaction queued (will be completed shortly): {id: %s}\n", event["id"].(string))
 
-			//var txHash common.Hash
+			var txHash gethcommon.Hash
 			txID := event["id"].(string)
-			txHash, e := s.Backend.CompleteTransaction(txID, TestConfig.Account1.Password)
-			s.NoError(e, "cannot complete queued transaction[%v]: %v", event["id"], e)
+			result := s.Backend.ApproveSignRequest(txID, TestConfig.Account1.Password)
+			s.NoError(result.Error, "cannot complete queued transaction[%v]: %v", event["id"], result.Error)
+
+			txHash.SetBytes(result.Response.Bytes())
 
 			s.T().Logf("Transaction complete: https://ropsten.etherscan.io/tx/%s", txHash.Hex())
 		}

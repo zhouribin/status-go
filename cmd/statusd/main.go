@@ -11,6 +11,8 @@ import (
 	"runtime"
 	"strings"
 
+	"github.com/status-im/status-go/logutils"
+
 	"github.com/ethereum/go-ethereum/log"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/status-im/status-go/cmd/statusd/debug"
@@ -30,7 +32,6 @@ var (
 
 var (
 	clusterConfigFile = flag.String("clusterconfig", "", "Cluster configuration file")
-	prodMode          = flag.Bool("production", false, "Whether production settings should be loaded")
 	nodeKeyFile       = flag.String("nodekey", "", "P2P node key file (private key)")
 	dataDir           = flag.String("datadir", params.DataDir, "Data directory for the databases and keystore")
 	networkID         = flag.Int("networkid", params.RopstenNetworkID, "Network identifier (integer, 1=Homestead, 3=Ropsten, 4=Rinkeby, 777=StatusChain)")
@@ -83,32 +84,6 @@ var (
 // All general log messages in this package should be routed through this logger.
 var logger = log.New("package", "status-go/cmd/statusd")
 
-func enhanceLogger(logger *log.Logger, config *params.NodeConfig) error {
-	var (
-		handler log.Handler
-		err     error
-	)
-
-	if config.LogFile != "" {
-		handler, err = log.FileHandler(config.LogFile, log.LogfmtFormat())
-		if err != nil {
-			return err
-		}
-	} else {
-		handler = log.StreamHandler(os.Stderr, log.TerminalFormat(true))
-	}
-
-	level, err := log.LvlFromString(strings.ToLower(config.LogLevel))
-	if err != nil {
-		return err
-	}
-
-	filteredHandler := log.LvlFilterHandler(level, handler)
-	log.Root().SetHandler(filteredHandler)
-
-	return nil
-}
-
 func main() {
 	flag.Var(&searchTopics, "topic.search", "Topic that will be searched in discovery v5, e.g (mailserver=1,1)")
 	flag.Var(&registerTopics, "topic.register", "Topic that will be registered using discovery v5.")
@@ -126,7 +101,7 @@ func main() {
 		return
 	}
 
-	if err := enhanceLogger(&logger, config); err != nil {
+	if err := logutils.OverrideRootLog(config.LogEnabled, config.LogLevel, config.LogFile, true); err != nil {
 		stdlog.Fatalf("Error initializing logger: %s", err)
 	}
 
@@ -164,7 +139,7 @@ func main() {
 		exitCode := syncAndStopNode(interruptCh, backend.StatusNode(), *syncAndExit)
 		// Call was interrupted. Wait for graceful shutdown.
 		if exitCode == -1 {
-			if node, err := backend.StatusNode().GethNode(); err == nil && node != nil {
+			if node := backend.StatusNode().GethNode(); node != nil {
 				node.Wait()
 			}
 			return
@@ -173,14 +148,11 @@ func main() {
 		os.Exit(exitCode)
 	}
 
-	node, err := backend.StatusNode().GethNode()
-	if err != nil {
-		logger.Error("Getting node failed", "error", err)
-		return
+	node := backend.StatusNode().GethNode()
+	if node != nil {
+		// wait till node has been stopped
+		node.Wait()
 	}
-
-	// wait till node has been stopped
-	node.Wait()
 }
 
 // startDebug starts the debugging API server.
@@ -195,9 +167,9 @@ func startCollectingStats(interruptCh <-chan struct{}, statusNode *node.StatusNo
 
 	logger.Info("Starting stats", "stats", *statsAddr)
 
-	node, err := statusNode.GethNode()
-	if err != nil {
-		logger.Error("Failed to run metrics because could not get node", "error", err)
+	node := statusNode.GethNode()
+	if node == nil {
+		logger.Error("Failed to run metrics because it could not get the node")
 		return
 	}
 
@@ -241,8 +213,7 @@ func startCollectingStats(interruptCh <-chan struct{}, statusNode *node.StatusNo
 
 // makeNodeConfig parses incoming CLI options and returns node configuration object
 func makeNodeConfig() (*params.NodeConfig, error) {
-	devMode := !*prodMode
-	nodeConfig, err := params.NewNodeConfig(*dataDir, *clusterConfigFile, uint64(*networkID), devMode)
+	nodeConfig, err := params.NewNodeConfig(*dataDir, *clusterConfigFile, uint64(*networkID))
 	if err != nil {
 		return nil, err
 	}
@@ -257,8 +228,13 @@ func makeNodeConfig() (*params.NodeConfig, error) {
 	if *logLevel != "" {
 		nodeConfig.LogLevel = *logLevel
 	}
+
 	if *logFile != "" {
 		nodeConfig.LogFile = *logFile
+	}
+
+	if *logLevel != "" || *logFile != "" {
+		nodeConfig.LogEnabled = true
 	}
 
 	nodeConfig.RPCEnabled = *httpEnabled

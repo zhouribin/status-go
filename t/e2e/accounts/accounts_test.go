@@ -219,8 +219,8 @@ func (s *AccountsTestSuite) TestSelectedAccountOnRestart() {
 	s.NoError(s.Backend.SelectAccount(address2, TestConfig.Account1.Password))
 
 	// stop node (and all of its sub-protocols)
-	nodeConfig, err := s.Backend.StatusNode().Config()
-	s.NoError(err)
+	nodeConfig := s.Backend.StatusNode().Config()
+	s.NotNil(nodeConfig)
 	preservedNodeConfig := *nodeConfig
 	s.NoError(s.Backend.StopNode())
 
@@ -244,7 +244,7 @@ func (s *AccountsTestSuite) TestSelectedAccountOnRestart() {
 	defer s.StopTestBackend()
 
 	// now logout, and make sure that on restart no account is selected (i.e. logout works properly)
-	s.NoError(s.Backend.AccountManager().Logout())
+	s.NoError(s.Backend.Logout())
 	s.RestartTestNode()
 
 	selectedAccount, err = s.Backend.AccountManager().SelectedAccount()

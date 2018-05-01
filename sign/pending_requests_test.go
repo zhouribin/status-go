@@ -3,6 +3,7 @@ package sign
 import (
 	"context"
 	"errors"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -39,33 +40,35 @@ func (s *PendingRequestsSuite) SetupTest() {
 	s.pendingRequests = NewPendingRequests()
 }
 
-func (s *PendingRequestsSuite) defaultCompleteFunc() completeFunc {
+func (s *PendingRequestsSuite) defaultCompleteFunc() CompleteFunc {
 	hash := gethcommon.Hash{1}
-	return func(acc *account.SelectedExtKey) (gethcommon.Hash, error) {
+	return func(acc *account.SelectedExtKey, password string) (Response, error) {
 		s.Nil(acc, "account should be `nil`")
-		return hash, nil
+		s.Equal(correctPassword, password)
+		return hash.Bytes(), nil
 	}
 }
 
-func (s *PendingRequestsSuite) delayedCompleteFunc() completeFunc {
+func (s *PendingRequestsSuite) delayedCompleteFunc() CompleteFunc {
 	hash := gethcommon.Hash{1}
-	return func(acc *account.SelectedExtKey) (gethcommon.Hash, error) {
+	return func(acc *account.SelectedExtKey, password string) (Response, error) {
 		time.Sleep(10 * time.Millisecond)
 		s.Nil(acc, "account should be `nil`")
-		return hash, nil
+		s.Equal(correctPassword, password)
+		return hash.Bytes(), nil
 	}
 }
 
-func (s *PendingRequestsSuite) errorCompleteFunc(err error) completeFunc {
+func (s *PendingRequestsSuite) errorCompleteFunc(err error) CompleteFunc {
 	hash := gethcommon.Hash{1}
-	return func(acc *account.SelectedExtKey) (gethcommon.Hash, error) {
+	return func(acc *account.SelectedExtKey, password string) (Response, error) {
 		s.Nil(acc, "account should be `nil`")
-		return hash, err
+		return hash.Bytes(), err
 	}
 }
 
 func (s *PendingRequestsSuite) TestGet() {
-	req, err := s.pendingRequests.Add(context.Background(), nil, s.defaultCompleteFunc())
+	req, err := s.pendingRequests.Add(context.Background(), "", nil, s.defaultCompleteFunc())
 	s.NoError(err)
 	for i := 2; i > 0; i-- {
 		actualRequest, err := s.pendingRequests.Get(req.ID)
@@ -74,16 +77,22 @@ func (s *PendingRequestsSuite) TestGet() {
 	}
 }
 
-func (s *PendingRequestsSuite) testComplete(password string, hash gethcommon.Hash, completeFunc completeFunc) (string, error) {
-	req, err := s.pendingRequests.Add(context.Background(), nil, completeFunc)
+func (s *PendingRequestsSuite) testComplete(password string, hash gethcommon.Hash, completeFunc CompleteFunc) (string, error) {
+	req, err := s.pendingRequests.Add(context.Background(), "", nil, completeFunc)
 	s.NoError(err)
 
 	s.True(s.pendingRequests.Has(req.ID), "sign request should exist")
 
-	hash2, err := s.pendingRequests.Approve(req.ID, password, testVerifyFunc)
-	s.Equal(hash, hash2, "hashes should match")
+	result := s.pendingRequests.Approve(req.ID, password, testVerifyFunc)
 
-	return req.ID, err
+	if s.pendingRequests.Has(req.ID) {
+		// transient error
+		s.Equal(EmptyResponse, result.Response, "no hash should be sent")
+	} else {
+		s.Equal(hash.Bytes(), result.Response.Bytes(), "hashes should match")
+	}
+
+	return req.ID, result.Error
 }
 
 func (s *PendingRequestsSuite) TestCompleteSuccess() {
@@ -119,27 +128,27 @@ func (s PendingRequestsSuite) TestMultipleComplete() {
 	id, err := s.testComplete(correctPassword, gethcommon.Hash{1}, s.defaultCompleteFunc())
 	s.NoError(err, "no errors should be there")
 
-	_, err = s.pendingRequests.Approve(id, correctPassword, testVerifyFunc)
+	result := s.pendingRequests.Approve(id, correctPassword, testVerifyFunc)
 
-	s.Equal(ErrSignReqNotFound, err)
+	s.Equal(ErrSignReqNotFound, result.Error)
 }
 
 func (s PendingRequestsSuite) TestConcurrentComplete() {
-	req, err := s.pendingRequests.Add(context.Background(), nil, s.delayedCompleteFunc())
+	req, err := s.pendingRequests.Add(context.Background(), "", nil, s.delayedCompleteFunc())
 	s.NoError(err)
 
 	s.True(s.pendingRequests.Has(req.ID), "sign request should exist")
 
-	approved := 0
-	tried := 0
+	var approved int32
+	var tried int32
 
 	for i := 10; i > 0; i-- {
 		go func() {
-			_, err = s.pendingRequests.Approve(req.ID, correctPassword, testVerifyFunc)
-			if err == nil {
-				approved++
+			result := s.pendingRequests.Approve(req.ID, correctPassword, testVerifyFunc)
+			if result.Error == nil {
+				atomic.AddInt32(&approved, 1)
 			}
-			tried++
+			atomic.AddInt32(&tried, 1)
 		}()
 	}
 
@@ -147,19 +156,19 @@ func (s PendingRequestsSuite) TestConcurrentComplete() {
 
 	s.False(s.pendingRequests.Has(req.ID), "sign request should exist")
 
-	s.Equal(approved, 1, "request should be approved only once")
-	s.Equal(tried, 10, "request should be tried to approve 10 times")
+	s.EqualValues(atomic.LoadInt32(&approved), 1, "request should be approved only once")
+	s.EqualValues(atomic.LoadInt32(&tried), 10, "request should be tried to approve 10 times")
 }
 
 func (s PendingRequestsSuite) TestWaitSuccess() {
-	req, err := s.pendingRequests.Add(context.Background(), nil, s.defaultCompleteFunc())
+	req, err := s.pendingRequests.Add(context.Background(), "", nil, s.defaultCompleteFunc())
 	s.NoError(err)
 
 	s.True(s.pendingRequests.Has(req.ID), "sign request should exist")
 
 	go func() {
-		_, err := s.pendingRequests.Approve(req.ID, correctPassword, testVerifyFunc)
-		s.NoError(err)
+		result := s.pendingRequests.Approve(req.ID, correctPassword, testVerifyFunc)
+		s.NoError(result.Error)
 	}()
 
 	result := s.pendingRequests.Wait(req.ID, 1*time.Second)
@@ -167,7 +176,7 @@ func (s PendingRequestsSuite) TestWaitSuccess() {
 }
 
 func (s PendingRequestsSuite) TestDiscard() {
-	req, err := s.pendingRequests.Add(context.Background(), nil, s.defaultCompleteFunc())
+	req, err := s.pendingRequests.Add(context.Background(), "", nil, s.defaultCompleteFunc())
 	s.NoError(err)
 
 	s.True(s.pendingRequests.Has(req.ID), "sign request should exist")
@@ -186,14 +195,14 @@ func (s PendingRequestsSuite) TestDiscard() {
 
 func (s PendingRequestsSuite) TestWaitFail() {
 	expectedError := errors.New("test-wait-fail")
-	req, err := s.pendingRequests.Add(context.Background(), nil, s.errorCompleteFunc(expectedError))
+	req, err := s.pendingRequests.Add(context.Background(), "", nil, s.errorCompleteFunc(expectedError))
 	s.NoError(err)
 
 	s.True(s.pendingRequests.Has(req.ID), "sign request should exist")
 
 	go func() {
-		_, err := s.pendingRequests.Approve(req.ID, correctPassword, testVerifyFunc)
-		s.Equal(expectedError, err)
+		result := s.pendingRequests.Approve(req.ID, correctPassword, testVerifyFunc)
+		s.Equal(expectedError, result.Error)
 	}()
 
 	result := s.pendingRequests.Wait(req.ID, 1*time.Second)
@@ -201,16 +210,15 @@ func (s PendingRequestsSuite) TestWaitFail() {
 }
 
 func (s PendingRequestsSuite) TestWaitTimeout() {
-	req, err := s.pendingRequests.Add(context.Background(), nil, s.delayedCompleteFunc())
+	req, err := s.pendingRequests.Add(context.Background(), "", nil, s.defaultCompleteFunc())
 	s.NoError(err)
 
 	s.True(s.pendingRequests.Has(req.ID), "sign request should exist")
 
-	go func() {
-		_, err := s.pendingRequests.Approve(req.ID, correctPassword, testVerifyFunc)
-		s.NoError(err)
-	}()
-
 	result := s.pendingRequests.Wait(req.ID, 0*time.Second)
-	s.Equal(result.Error, ErrSignReqTimedOut)
+	s.Equal(ErrSignReqTimedOut, result.Error)
+
+	// Try approving the timeouted request, it will fail
+	result = s.pendingRequests.Approve(req.ID, correctPassword, testVerifyFunc)
+	s.NotNil(result.Error)
 }

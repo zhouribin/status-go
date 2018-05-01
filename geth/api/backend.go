@@ -9,13 +9,17 @@ import (
 	gethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/log"
 
+	fcmlib "github.com/NaySoftware/go-fcm"
+
 	"github.com/status-im/status-go/geth/account"
 	"github.com/status-im/status-go/geth/jail"
 	"github.com/status-im/status-go/geth/node"
 	"github.com/status-im/status-go/geth/notifications/push/fcm"
 	"github.com/status-im/status-go/geth/params"
+	"github.com/status-im/status-go/geth/rpc"
 	"github.com/status-im/status-go/geth/signal"
 	"github.com/status-im/status-go/geth/transactions"
+	"github.com/status-im/status-go/services/personal"
 	"github.com/status-im/status-go/sign"
 )
 
@@ -36,6 +40,7 @@ type StatusBackend struct {
 	mu                  sync.Mutex
 	statusNode          *node.StatusNode
 	pendingSignRequests *sign.PendingRequests
+	personalAPI         *personal.PublicAPI
 	accountManager      *account.Manager
 	transactor          *transactions.Transactor
 	jailManager         jail.Manager
@@ -52,6 +57,7 @@ func NewStatusBackend() *StatusBackend {
 	pendingSignRequests := sign.NewPendingRequests()
 	accountManager := account.NewManager(statusNode)
 	transactor := transactions.NewTransactor(pendingSignRequests)
+	personalAPI := personal.NewAPI(pendingSignRequests)
 	jailManager := jail.New(statusNode)
 	notificationManager := fcm.NewNotification(fcmServerKey)
 
@@ -61,6 +67,7 @@ func NewStatusBackend() *StatusBackend {
 		accountManager:      accountManager,
 		jailManager:         jailManager,
 		transactor:          transactor,
+		personalAPI:         personalAPI,
 		newNotification:     notificationManager,
 		log:                 log.New("package", "status-go/geth/api.StatusBackend"),
 	}
@@ -79,6 +86,11 @@ func (b *StatusBackend) AccountManager() *account.Manager {
 // JailManager returns reference to jail
 func (b *StatusBackend) JailManager() jail.Manager {
 	return b.jailManager
+}
+
+// PersonalAPI returns reference to personal APIs
+func (b *StatusBackend) PersonalAPI() *personal.PublicAPI {
+	return b.personalAPI
 }
 
 // Transactor returns reference to a status transactor
@@ -100,7 +112,19 @@ func (b *StatusBackend) IsNodeRunning() bool {
 func (b *StatusBackend) StartNode(config *params.NodeConfig) error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	return b.startNode(config)
+
+	if err := b.startNode(config); err != nil {
+		signal.Send(signal.Envelope{
+			Type: signal.EventNodeCrashed,
+			Event: signal.NodeCrashEvent{
+				Error: err,
+			},
+		})
+
+		return err
+	}
+
+	return nil
 }
 
 func (b *StatusBackend) startNode(config *params.NodeConfig) (err error) {
@@ -109,34 +133,30 @@ func (b *StatusBackend) startNode(config *params.NodeConfig) (err error) {
 			err = fmt.Errorf("node crashed on start: %v", err)
 		}
 	}()
-	err = b.statusNode.Start(config)
-	if err != nil {
-		switch err.(type) {
-		case node.RPCClientError:
-			err = fmt.Errorf("%v: %v", node.ErrRPCClient, err)
-		case node.EthNodeError:
-			err = fmt.Errorf("%v: %v", node.ErrNodeStartFailure, err)
-		}
-		signal.Send(signal.Envelope{
-			Type: signal.EventNodeCrashed,
-			Event: signal.NodeCrashEvent{
-				Error: err,
-			},
-		})
-		return err
+
+	if err = b.statusNode.Start(config); err != nil {
+		return
 	}
 	signal.Send(signal.Envelope{Type: signal.EventNodeStarted})
 
 	b.transactor.SetNetworkID(config.NetworkID)
-	b.transactor.SetRPCClient(b.statusNode.RPCClient())
-	if err := b.registerHandlers(); err != nil {
+	b.transactor.SetRPC(b.statusNode.RPCClient(), rpc.DefaultCallTimeout)
+	b.personalAPI.SetRPC(b.statusNode.RPCPrivateClient(), rpc.DefaultCallTimeout)
+
+	if err = b.registerHandlers(); err != nil {
 		b.log.Error("Handler registration failed", "err", err)
+		return
 	}
-	if err := b.ReSelectAccount(); err != nil {
+	b.log.Info("Handlers registered")
+
+	if err = b.ReSelectAccount(); err != nil {
 		b.log.Error("Reselect account failed", "err", err)
+		return
 	}
 	b.log.Info("Account reselected")
+
 	signal.Send(signal.Envelope{Type: signal.EventNodeReady})
+
 	return nil
 }
 
@@ -158,14 +178,14 @@ func (b *StatusBackend) stopNode() error {
 
 // RestartNode restart running Status node, fails if node is not running
 func (b *StatusBackend) RestartNode() error {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
 	if !b.IsNodeRunning() {
 		return node.ErrNoRunningNode
 	}
-	config, err := b.statusNode.Config()
-	if err != nil {
-		return err
-	}
-	newcfg := *config
+
+	newcfg := *(b.statusNode.Config())
 	if err := b.stopNode(); err != nil {
 		return err
 	}
@@ -177,11 +197,7 @@ func (b *StatusBackend) RestartNode() error {
 func (b *StatusBackend) ResetChainData() error {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	config, err := b.statusNode.Config()
-	if err != nil {
-		return err
-	}
-	newcfg := *config
+	newcfg := *(b.statusNode.Config())
 	if err := b.stopNode(); err != nil {
 		return err
 	}
@@ -193,9 +209,15 @@ func (b *StatusBackend) ResetChainData() error {
 	return b.startNode(&newcfg)
 }
 
-// CallRPC executes RPC request on node's in-proc RPC server
+// CallRPC executes public RPC requests on node's in-proc RPC server.
 func (b *StatusBackend) CallRPC(inputJSON string) string {
 	client := b.statusNode.RPCClient()
+	return client.CallRaw(inputJSON)
+}
+
+// CallPrivateRPC executes public and private RPC requests on node's in-proc RPC server.
+func (b *StatusBackend) CallPrivateRPC(inputJSON string) string {
+	client := b.statusNode.RPCPrivateClient()
 	return client.CallRaw(inputJSON)
 }
 
@@ -210,10 +232,7 @@ func (b *StatusBackend) getVerifiedAccount(password string) (*account.SelectedEx
 		b.log.Error("failed to get a selected account", "err", err)
 		return nil, err
 	}
-	config, err := b.StatusNode().Config()
-	if err != nil {
-		return nil, err
-	}
+	config := b.StatusNode().Config()
 	_, err = b.accountManager.VerifyAccountPassword(config.KeyStoreDir, selectedAccount.Address.String(), password)
 	if err != nil {
 		b.log.Error("failed to verify account", "account", selectedAccount.Address.String(), "error", err)
@@ -222,34 +241,30 @@ func (b *StatusBackend) getVerifiedAccount(password string) (*account.SelectedEx
 	return selectedAccount, nil
 }
 
-// CompleteTransaction instructs backend to complete sending of a given transaction
-func (b *StatusBackend) CompleteTransaction(id string, password string) (hash gethcommon.Hash, err error) {
+// ApproveSignRequest instructs backend to complete sending of a given transaction
+func (b *StatusBackend) ApproveSignRequest(id string, password string) sign.Result {
 	return b.pendingSignRequests.Approve(id, password, b.getVerifiedAccount)
 }
 
-// CompleteTransactions instructs backend to complete sending of multiple transactions
-func (b *StatusBackend) CompleteTransactions(ids []string, password string) map[string]sign.Result {
+// ApproveSignRequests instructs backend to complete sending of multiple transactions
+func (b *StatusBackend) ApproveSignRequests(ids []string, password string) map[string]sign.Result {
 	results := make(map[string]sign.Result)
 	for _, txID := range ids {
-		txHash, txErr := b.CompleteTransaction(txID, password)
-		results[txID] = sign.Result{
-			Hash:  txHash,
-			Error: txErr,
-		}
+		results[txID] = b.ApproveSignRequest(txID, password)
 	}
 	return results
 }
 
-// DiscardTransaction discards a given transaction from transaction queue
-func (b *StatusBackend) DiscardTransaction(id string) error {
+// DiscardSignRequest discards a given transaction from transaction queue
+func (b *StatusBackend) DiscardSignRequest(id string) error {
 	return b.pendingSignRequests.Discard(id)
 }
 
-// DiscardTransactions discards given multiple transactions from transaction queue
-func (b *StatusBackend) DiscardTransactions(ids []string) map[string]error {
+// DiscardSignRequests discards given multiple transactions from transaction queue
+func (b *StatusBackend) DiscardSignRequests(ids []string) map[string]error {
 	results := make(map[string]error)
 	for _, txID := range ids {
-		err := b.DiscardTransaction(txID)
+		err := b.DiscardSignRequest(txID)
 		if err != nil {
 			results[txID] = err
 		}
@@ -262,7 +277,7 @@ func (b *StatusBackend) DiscardTransactions(ids []string) map[string]error {
 func (b *StatusBackend) registerHandlers() error {
 	rpcClient := b.StatusNode().RPCClient()
 	if rpcClient == nil {
-		return node.ErrRPCClient
+		return errors.New("RPC client unavailable")
 	}
 
 	rpcClient.RegisterHandler(params.AccountsMethodName, func(context.Context, ...interface{}) (interface{}, error) {
@@ -283,14 +298,29 @@ func (b *StatusBackend) registerHandlers() error {
 		return hash.Hex(), err
 	})
 
+	rpcClient.RegisterHandler(params.PersonalSignMethodName, b.PersonalAPI().Sign)
+	rpcClient.RegisterHandler(params.PersonalRecoverMethodName, b.PersonalAPI().Recover)
+
 	return nil
 }
 
 //
 
 // ConnectionChange handles network state changes logic.
-func (b *StatusBackend) ConnectionChange(state ConnectionState) {
+func (b *StatusBackend) ConnectionChange(typ string, expensive bool) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	state := ConnectionState{
+		Type:      NewConnectionType(typ),
+		Expensive: expensive,
+	}
+	if typ == "none" {
+		state.Offline = true
+	}
+
 	b.log.Info("Network state change", "old", b.connectionState, "new", state)
+
 	b.connectionState = state
 
 	// logic of handling state changes here
@@ -298,8 +328,15 @@ func (b *StatusBackend) ConnectionChange(state ConnectionState) {
 }
 
 // AppStateChange handles app state changes (background/foreground).
-func (b *StatusBackend) AppStateChange(state AppState) {
-	b.log.Info("App State changed.", "new-state", state)
+// state values: see https://facebook.github.io/react-native/docs/appstate.html
+func (b *StatusBackend) AppStateChange(state string) {
+	appState, err := ParseAppState(state)
+	if err != nil {
+		log.Error("AppStateChange failed, ignoring", "error", err)
+		return // and do nothing
+	}
+
+	b.log.Info("App State changed", "new-state", appState)
 
 	// TODO: put node in low-power mode if the app is in background (or inactive)
 	// and normal mode if the app is in foreground.
@@ -307,16 +344,24 @@ func (b *StatusBackend) AppStateChange(state AppState) {
 
 // Logout clears whisper identities.
 func (b *StatusBackend) Logout() error {
+	// FIXME(oleg-raev): This method doesn't make stop, it rather resets its cells to an initial state
+	// and should be properly renamed, for example: ResetCells
+	b.jailManager.Stop()
+
 	whisperService, err := b.statusNode.WhisperService()
-	if err != nil {
+	switch err {
+	case node.ErrServiceUnknown: // Whisper was never registered
+	case nil:
+		if err := whisperService.DeleteKeyPairs(); err != nil {
+			return fmt.Errorf("%s: %v", ErrWhisperClearIdentitiesFailure, err)
+		}
+	default:
 		return err
 	}
-	err = whisperService.DeleteKeyPairs()
-	if err != nil {
-		return fmt.Errorf("%s: %v", ErrWhisperClearIdentitiesFailure, err)
-	}
 
-	return b.AccountManager().Logout()
+	b.AccountManager().Logout()
+
+	return nil
 }
 
 // ReSelectAccount selects previously selected account, often, after node restart.
@@ -326,13 +371,16 @@ func (b *StatusBackend) ReSelectAccount() error {
 		return nil
 	}
 	whisperService, err := b.statusNode.WhisperService()
-	if err != nil {
+	switch err {
+	case node.ErrServiceUnknown: // Whisper was never registered
+	case nil:
+		if err := whisperService.SelectKeyPair(selectedAccount.AccountKey.PrivateKey); err != nil {
+			return ErrWhisperIdentityInjectionFailure
+		}
+	default:
 		return err
 	}
 
-	if err := whisperService.SelectKeyPair(selectedAccount.AccountKey.PrivateKey); err != nil {
-		return ErrWhisperIdentityInjectionFailure
-	}
 	return nil
 }
 
@@ -340,6 +388,10 @@ func (b *StatusBackend) ReSelectAccount() error {
 // using provided password. Once verification is done, decrypted key is injected into Whisper (as a single identity,
 // all previous identities are removed).
 func (b *StatusBackend) SelectAccount(address, password string) error {
+	// FIXME(oleg-raev): This method doesn't make stop, it rather resets its cells to an initial state
+	// and should be properly renamed, for example: ResetCells
+	b.jailManager.Stop()
+
 	err := b.accountManager.SelectAccount(address, password)
 	if err != nil {
 		return err
@@ -350,14 +402,25 @@ func (b *StatusBackend) SelectAccount(address, password string) error {
 	}
 
 	whisperService, err := b.statusNode.WhisperService()
-	if err != nil {
+	switch err {
+	case node.ErrServiceUnknown: // Whisper was never registered
+	case nil:
+		if err := whisperService.SelectKeyPair(acc.AccountKey.PrivateKey); err != nil {
+			return ErrWhisperIdentityInjectionFailure
+		}
+	default:
 		return err
 	}
 
-	err = whisperService.SelectKeyPair(acc.AccountKey.PrivateKey)
+	return nil
+}
+
+// NotifyUsers sends push notifications to users.
+func (b *StatusBackend) NotifyUsers(message string, payload fcmlib.NotificationPayload, tokens ...string) error {
+	err := b.newNotification().Send(message, payload, tokens...)
 	if err != nil {
-		return ErrWhisperIdentityInjectionFailure
+		b.log.Error("Notify failed", "error", err)
 	}
 
-	return nil
+	return err
 }

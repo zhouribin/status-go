@@ -17,23 +17,17 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-var clusterConfigData = []byte(`[
+var clusterConfigData = []byte(`
+[
   {
     "networkID": 3,
-    "prod": {
-      "staticnodes": [
-        "enode://7ab298cedc4185a894d21d8a4615262ec6bdce66c9b6783878258e0d5b31013d30c9038932432f70e5b2b6a5cd323bf820554fcb22fbc7b45367889522e9c449@10.1.1.1:30303",
-        "enode://f59e8701f18c79c5cbc7618dc7bb928d44dc2f5405c7d693dad97da2d8585975942ec6fd36d3fe608bfdc7270a34a4dd00f38cfe96b2baa24f7cd0ac28d382a1@10.1.1.2:30303"
-	  ]
-	},
-    "dev": {
-      "staticnodes": [
-        "enode://7ab298cedc4185a894d21d8a4615262ec6bdce66c9b6783878258e0d5b31013d30c9038932432f70e5b2b6a5cd323bf820554fcb22fbc7b45367889522e9c449@10.1.1.1:30303",
-        "enode://f59e8701f18c79c5cbc7618dc7bb928d44dc2f5405c7d693dad97da2d8585975942ec6fd36d3fe608bfdc7270a34a4dd00f38cfe96b2baa24f7cd0ac28d382a1@10.1.1.2:30303"
-	  ]
-	}
+    "staticnodes": [
+      "enode://7ab298cedc4185a894d21d8a4615262ec6bdce66c9b6783878258e0d5b31013d30c9038932432f70e5b2b6a5cd323bf820554fcb22fbc7b45367889522e9c449@10.1.1.1:30303",
+      "enode://f59e8701f18c79c5cbc7618dc7bb928d44dc2f5405c7d693dad97da2d8585975942ec6fd36d3fe608bfdc7270a34a4dd00f38cfe96b2baa24f7cd0ac28d382a1@10.1.1.2:30303"
+    ]
   }
-]`)
+]
+`)
 
 var loadConfigTestCases = []struct {
 	name       string
@@ -144,8 +138,6 @@ var loadConfigTestCases = []struct {
 			require.Equal(t, params.HTTPPort, nodeConfig.HTTPPort)
 			require.Equal(t, params.HTTPHost, nodeConfig.HTTPHost)
 			require.True(t, nodeConfig.RPCEnabled)
-			require.False(t, nodeConfig.WSEnabled)
-			require.Equal(t, 4242, nodeConfig.WSPort)
 			require.True(t, nodeConfig.IPCEnabled)
 			require.Equal(t, 64, nodeConfig.LightEthConfig.DatabaseCache)
 		},
@@ -277,8 +269,7 @@ var loadConfigTestCases = []struct {
 		`default cluster configuration (Ropsten Prod)`,
 		`{
 			"NetworkId": 3,
-			"DataDir": "$TMPDIR",
-			"DevMode": false
+			"DataDir": "$TMPDIR"
 		}`,
 		func(t *testing.T, dataDir string, nodeConfig *params.NodeConfig, err error) {
 			require.NoError(t, err)
@@ -311,24 +302,8 @@ var loadConfigTestCases = []struct {
 		func(t *testing.T, dataDir string, nodeConfig *params.NodeConfig, err error) {
 			require.NoError(t, err)
 			require.True(t, nodeConfig.ClusterConfig.Enabled, "cluster configuration is expected to be enabled by default")
-
-			enodes := nodeConfig.ClusterConfig.StaticNodes
-			require.True(t, len(enodes) >= 3)
-		},
-	},
-	{
-		`select cluster configuration (Rinkeby Prod)`,
-		`{
-			"NetworkId": 4,
-			"DataDir": "$TMPDIR",
-			"DevMode": false
-		}`,
-		func(t *testing.T, dataDir string, nodeConfig *params.NodeConfig, err error) {
-			require.NoError(t, err)
-			require.True(t, nodeConfig.ClusterConfig.Enabled, "cluster configuration is expected to be enabled by default")
-
-			enodes := nodeConfig.ClusterConfig.StaticNodes
-			require.True(t, len(enodes) >= 3)
+			require.True(t, nodeConfig.Discovery)
+			require.True(t, len(nodeConfig.ClusterConfig.BootNodes) >= 2)
 		},
 	},
 	{
@@ -346,46 +321,6 @@ var loadConfigTestCases = []struct {
 		},
 	},
 	{
-		`select cluster configuration (Mainnet Prod)`,
-		`{
-			"NetworkId": 1,
-			"DataDir": "$TMPDIR",
-			"DevMode": false
-		}`,
-		func(t *testing.T, dataDir string, nodeConfig *params.NodeConfig, err error) {
-			require.NoError(t, err)
-			require.True(t, nodeConfig.ClusterConfig.Enabled, "cluster confguration is expected to be enabled by default")
-
-			enodes := nodeConfig.ClusterConfig.StaticNodes
-			require.True(t, len(enodes) == 0)
-		},
-	},
-	{
-		`default DevMode (true)`,
-		`{
-			"NetworkId": 311,
-			"DataDir": "$TMPDIR"
-		}`,
-		func(t *testing.T, dataDir string, nodeConfig *params.NodeConfig, err error) {
-			require.NoError(t, err)
-			require.True(t, nodeConfig.DevMode)
-			require.True(t, nodeConfig.ClusterConfig.Enabled)
-		},
-	},
-	{
-		`explicit DevMode = false`,
-		`{
-			"NetworkId": 3,
-			"DataDir": "$TMPDIR",
-			"DevMode": false
-		}`,
-		func(t *testing.T, dataDir string, nodeConfig *params.NodeConfig, err error) {
-			require.NoError(t, err)
-			require.False(t, nodeConfig.DevMode)
-			require.True(t, nodeConfig.ClusterConfig.Enabled)
-		},
-	},
-	{
 		`explicit WhisperConfig.LightClient = true`,
 		`{
 			"NetworkId": 3,
@@ -397,6 +332,20 @@ var loadConfigTestCases = []struct {
 		func(t *testing.T, dataDir string, nodeConfig *params.NodeConfig, err error) {
 			require.NoError(t, err)
 			require.True(t, nodeConfig.WhisperConfig.LightClient)
+		},
+	},
+	{
+		`default peer limits`,
+		`{
+			"NetworkId": 4,
+			"DataDir": "$TMPDIR"
+		}`,
+		func(t *testing.T, dataDir string, nodeConfig *params.NodeConfig, err error) {
+			require.NoError(t, err)
+			require.NotNil(t, nodeConfig.RequireTopics)
+			require.True(t, nodeConfig.Discovery)
+			require.Contains(t, nodeConfig.RequireTopics, params.WhisperDiscv5Topic)
+			require.Equal(t, params.WhisperDiscv5Limits, nodeConfig.RequireTopics[params.WhisperDiscv5Topic])
 		},
 	},
 }
@@ -415,10 +364,11 @@ func TestLoadNodeConfig(t *testing.T) {
 	t.Log(tmpDir)
 
 	for _, testCase := range loadConfigTestCases {
-		t.Log("test: " + testCase.name)
-		testCase.configJSON = strings.Replace(testCase.configJSON, "$TMPDIR", tmpDir, -1)
-		nodeConfig, err := params.LoadNodeConfig(testCase.configJSON)
-		testCase.validator(t, tmpDir, nodeConfig, err)
+		t.Run(testCase.name, func(t *testing.T) {
+			testCase.configJSON = strings.Replace(testCase.configJSON, "$TMPDIR", tmpDir, -1)
+			nodeConfig, err := params.LoadNodeConfig(testCase.configJSON)
+			testCase.validator(t, tmpDir, nodeConfig, err)
+		})
 	}
 }
 
@@ -427,7 +377,7 @@ func TestConfigWriteRead(t *testing.T) {
 	require.Nil(t, err)
 	defer os.RemoveAll(tmpDir) // nolint: errcheck
 
-	nodeConfig, err := params.NewNodeConfig(tmpDir, "", params.RopstenNetworkID, true)
+	nodeConfig, err := params.NewNodeConfig(tmpDir, "", params.RopstenNetworkID)
 	require.Nil(t, err, "cannot create new config object")
 
 	err = nodeConfig.Save()
@@ -435,7 +385,6 @@ func TestConfigWriteRead(t *testing.T) {
 
 	loadedConfigData, err := ioutil.ReadFile(filepath.Join(nodeConfig.DataDir, "config.json"))
 	require.Nil(t, err, "cannot read configuration from disk")
-	require.Contains(t, string(loadedConfigData), fmt.Sprintf(`"DevMode": %t`, true))
 	require.Contains(t, string(loadedConfigData), fmt.Sprintf(`"NetworkId": %d`, params.RopstenNetworkID))
 	require.Contains(t, string(loadedConfigData), fmt.Sprintf(`"DataDir": "%s"`, tmpDir))
 }

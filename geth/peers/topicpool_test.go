@@ -38,7 +38,7 @@ func (s *TopicPoolSuite) SetupTest() {
 	}
 	s.Require().NoError(s.peer.Start())
 	topic := discv5.Topic("cap=cap1")
-	limits := params.Limits{1, 2}
+	limits := params.NewLimits(1, 2)
 	s.topicPool = NewTopicPool(topic, limits, 100*time.Millisecond, 200*time.Millisecond)
 	s.topicPool.period = make(chan time.Duration, 2)
 	s.topicPool.running = 1
@@ -62,8 +62,8 @@ func (s *TopicPoolSuite) TestSyncSwitches() {
 	s.topicPool.processFoundNode(s.peer, testPeer)
 	s.topicPool.ConfirmAdded(s.peer, discover.NodeID(testPeer.ID))
 	s.AssertConsumed(s.topicPool.period, s.topicPool.slowSync, time.Second)
-	s.True(s.topicPool.peers[testPeer.ID].connected)
-	s.topicPool.ConfirmDropped(s.peer, discover.NodeID(testPeer.ID), p2p.DiscProtocolError.Error())
+	s.NotNil(s.topicPool.connectedPeers[testPeer.ID])
+	s.topicPool.ConfirmDropped(s.peer, discover.NodeID(testPeer.ID))
 	s.AssertConsumed(s.topicPool.period, s.topicPool.fastSync, time.Second)
 }
 
@@ -75,22 +75,62 @@ func (s *TopicPoolSuite) TestNewPeerSelectedOnDrop() {
 	s.topicPool.processFoundNode(s.peer, peer1)
 	s.topicPool.processFoundNode(s.peer, peer2)
 	s.topicPool.processFoundNode(s.peer, peer3)
+	s.Len(s.topicPool.peerPool, 3)
+	s.Len(s.topicPool.peerPoolQueue, 3)
 	s.topicPool.ConfirmAdded(s.peer, discover.NodeID(peer1.ID))
-	s.True(s.topicPool.peers[peer1.ID].connected)
+	s.Contains(s.topicPool.connectedPeers, peer1.ID)
 	s.topicPool.ConfirmAdded(s.peer, discover.NodeID(peer2.ID))
-	s.True(s.topicPool.peers[peer2.ID].connected)
-	s.topicPool.ConfirmAdded(s.peer, discover.NodeID(peer3.ID))
-	s.False(s.topicPool.peers[peer3.ID].connected)
+	s.Contains(s.topicPool.connectedPeers, peer2.ID)
+	s.Len(s.topicPool.peerPool, 1)
+	s.Len(s.topicPool.peerPoolQueue, 1)
 
-	s.True(s.topicPool.ConfirmDropped(s.peer, discover.NodeID(peer1.ID), p2p.DiscNetworkError.Error()))
+	// drop peer1
+	s.True(s.topicPool.ConfirmDropped(s.peer, discover.NodeID(peer1.ID)))
+	s.NotContains(s.topicPool.connectedPeers, peer1.ID)
+
+	// add peer from the pool
+	s.Equal(peer3.ID, s.topicPool.AddPeerFromTable(s.peer).ID)
+	s.Len(s.topicPool.peerPool, 0)
+	s.Len(s.topicPool.peerPoolQueue, 0)
 }
 
 func (s *TopicPoolSuite) TestRequestedDoesntRemove() {
+	// max limit is 1 because we test that 2nd peer will stay in local table
+	// when we request to drop it
+	s.topicPool.limits = params.NewLimits(1, 1)
 	peer1 := discv5.NewNode(discv5.NodeID{1}, s.peer.Self().IP, 32311, 32311)
+	peer2 := discv5.NewNode(discv5.NodeID{2}, s.peer.Self().IP, 32311, 32311)
 	s.topicPool.processFoundNode(s.peer, peer1)
+	s.topicPool.processFoundNode(s.peer, peer2)
 	s.topicPool.ConfirmAdded(s.peer, discover.NodeID(peer1.ID))
-	s.topicPool.ConfirmDropped(s.peer, discover.NodeID(peer1.ID), p2p.DiscRequested.Error())
-	s.Contains(s.topicPool.peers, peer1.ID)
-	s.topicPool.ConfirmDropped(s.peer, discover.NodeID(peer1.ID), p2p.DiscProtocolError.Error())
-	s.NotContains(s.topicPool.peers, peer1.ID)
+	s.topicPool.ConfirmAdded(s.peer, discover.NodeID(peer2.ID))
+	s.False(s.topicPool.connectedPeers[peer1.ID].dismissed)
+	s.True(s.topicPool.peerPool[peer2.ID].dismissed)
+	s.topicPool.ConfirmDropped(s.peer, discover.NodeID(peer2.ID))
+	s.Contains(s.topicPool.peerPool, peer2.ID)
+	s.NotContains(s.topicPool.connectedPeers, peer2.ID)
+	s.topicPool.ConfirmDropped(s.peer, discover.NodeID(peer1.ID))
+	s.NotContains(s.topicPool.peerPool, peer1.ID)
+	s.NotContains(s.topicPool.connectedPeers, peer1.ID)
+}
+
+func (s *TopicPoolSuite) TestTheMostRecentPeerIsSelected() {
+	s.topicPool.limits = params.NewLimits(1, 1)
+
+	peer1 := discv5.NewNode(discv5.NodeID{1}, s.peer.Self().IP, 32311, 32311)
+	peer2 := discv5.NewNode(discv5.NodeID{2}, s.peer.Self().IP, 32311, 32311)
+	peer3 := discv5.NewNode(discv5.NodeID{3}, s.peer.Self().IP, 32311, 32311)
+
+	// after these operations, peer1 is confirmed and peer3 and peer2
+	// was added to the pool; peer3 is the most recent one
+	s.topicPool.processFoundNode(s.peer, peer1)
+	s.topicPool.processFoundNode(s.peer, peer2)
+	s.topicPool.processFoundNode(s.peer, peer3)
+	s.topicPool.ConfirmAdded(s.peer, discover.NodeID(peer1.ID))
+
+	// peer1 has dropped
+	s.topicPool.ConfirmDropped(s.peer, discover.NodeID(peer1.ID))
+	// and peer3 is take from the pool as the most recent
+	s.True(s.topicPool.peerPool[peer2.ID].discoveredTime < s.topicPool.peerPool[peer3.ID].discoveredTime)
+	s.Equal(peer3.ID, s.topicPool.AddPeerFromTable(s.peer).ID)
 }

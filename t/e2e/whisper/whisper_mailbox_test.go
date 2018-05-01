@@ -28,17 +28,18 @@ func TestWhisperMailboxTestSuite(t *testing.T) {
 }
 
 func (s *WhisperMailboxSuite) TestRequestMessageFromMailboxAsync() {
+	var err error
 	// Start mailbox and status node.
 	mailboxBackend, stop := s.startMailboxBackend()
 	defer stop()
-	mailboxNode, err := mailboxBackend.StatusNode().GethNode()
-	s.Require().NoError(err)
+	s.Require().True(mailboxBackend.IsNodeRunning())
+	mailboxNode := mailboxBackend.StatusNode().GethNode()
 	mailboxEnode := mailboxNode.Server().NodeInfo().Enode
 
 	sender, stop := s.startBackend("sender")
 	defer stop()
-	node, err := sender.StatusNode().GethNode()
-	s.Require().NoError(err)
+	s.Require().True(sender.IsNodeRunning())
+	node := sender.StatusNode().GethNode()
 
 	s.Require().NotEqual(mailboxEnode, node.Server().NodeInfo().Enode)
 
@@ -97,7 +98,7 @@ func (s *WhisperMailboxSuite) TestRequestMessageFromMailboxAsync() {
 	reqMessagesBody := `{
 		"jsonrpc": "2.0",
 		"id": 1,
-		"method": "shh_requestMessages",
+		"method": "shhext_requestMessages",
 		"params": [{
 					"mailServerPeer":"` + mailboxPeerStr + `",
 					"topic":"` + topic.String() + `",
@@ -124,6 +125,8 @@ func (s *WhisperMailboxSuite) TestRequestMessageFromMailboxAsync() {
 }
 
 func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
+	var err error
+
 	// Start mailbox, alice, bob, charlie node.
 	mailboxBackend, stop := s.startMailboxBackend()
 	defer stop()
@@ -138,8 +141,8 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	defer stop()
 
 	// Add mailbox to static peers.
-	mailboxNode, err := mailboxBackend.StatusNode().GethNode()
-	s.Require().NoError(err)
+	s.Require().True(mailboxBackend.IsNodeRunning())
+	mailboxNode := mailboxBackend.StatusNode().GethNode()
 	mailboxEnode := mailboxNode.Server().NodeInfo().Enode
 
 	err = aliceBackend.StatusNode().AddPeer(mailboxEnode)
@@ -177,6 +180,8 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	s.Require().NoError(err)
 	// Generate a group chat topic.
 	groupChatTopic := whisper.BytesToTopic([]byte("groupChatTopic"))
+	// sender must be subscribed to message topic it sends
+	s.NotNil(s.createGroupChatMessageFilter(aliceRPCClient, groupChatKeyID, groupChatTopic.String()))
 	groupChatPayload := newGroupChatParams(groupChatKey, groupChatTopic)
 	payloadStr, err := groupChatPayload.Encode()
 	s.Require().NoError(err)
@@ -276,32 +281,6 @@ func (s *WhisperMailboxSuite) TestRequestMessagesInGroupChat() {
 	messages = s.getMessagesByMessageFilterID(charlieRPCClient, charlieGroupChatMessageFilterID)
 	s.Require().Equal(1, len(messages))
 	s.Require().Equal(helloWorldMessage, messages[0]["payload"].(string))
-}
-
-func (s *WhisperMailboxSuite) TestSendMessageWithoutSubscription() {
-	aliceBackend, stop := s.startBackend("alice")
-	defer stop()
-
-	// We need to wait >= whisper.DefaultSyncAllowance seconds to update Bloom filter tolerated.
-	time.Sleep((whisper.DefaultSyncAllowance + 1) * time.Second)
-
-	// Get whisper service.
-	aliceWhisperService, err := aliceBackend.StatusNode().WhisperService()
-	s.Require().NoError(err)
-
-	// Get rpc client.
-	aliceRPCClient := aliceBackend.StatusNode().RPCClient()
-
-	// Generate group chat symkey and topic.
-	groupChatKeyID, err := aliceWhisperService.GenerateSymKey()
-	s.Require().NoError(err)
-
-	// Generate group chat topic.
-	groupChatTopic := whisper.BytesToTopic([]byte("groupChatTopic"))
-
-	// Alice send message to group chat.
-	helloWorldMessage := hexutil.Encode([]byte("Hello world!"))
-	s.postMessageToGroup(aliceRPCClient, groupChatKeyID, groupChatTopic.String(), helloWorldMessage)
 }
 
 func newGroupChatParams(symkey []byte, topic whisper.TopicType) groupChatParams {
@@ -500,7 +479,7 @@ func (s *WhisperMailboxSuite) requestHistoricMessages(rpcCli *rpc.Client, mailbo
 	resp := rpcCli.CallRaw(`{
 		"jsonrpc": "2.0",
 		"id": 2,
-		"method": "shh_requestMessages",
+		"method": "shhext_requestMessages",
 		"params": [{
 					"mailServerPeer":"` + mailboxEnode + `",
 					"topic":"` + topic + `",

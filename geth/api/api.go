@@ -103,9 +103,14 @@ func (api *StatusAPI) ResetChainDataAsync() <-chan error {
 	return runAsync(api.ResetChainData)
 }
 
-// CallRPC executes RPC request on node's in-proc RPC server
+// CallRPC executes public RPC requests on node's in-proc RPC server.
 func (api *StatusAPI) CallRPC(inputJSON string) string {
 	return api.b.CallRPC(inputJSON)
+}
+
+// CallPrivateRPC executes public and private RPC requests on node's in-proc RPC server.
+func (api *StatusAPI) CallPrivateRPC(inputJSON string) string {
+	return api.b.CallPrivateRPC(inputJSON)
 }
 
 // CreateAccount creates an internal geth account
@@ -139,15 +144,11 @@ func (api *StatusAPI) VerifyAccountPassword(keyStoreDir, address, password strin
 // using provided password. Once verification is done, decrypted key is injected into Whisper (as a single identity,
 // all previous identities are removed).
 func (api *StatusAPI) SelectAccount(address, password string) error {
-	// FIXME(oleg-raev): This method doesn't make stop, it rather resets its cells to an initial state
-	// and should be properly renamed, for example: ResetCells
-	api.b.jailManager.Stop()
 	return api.b.SelectAccount(address, password)
 }
 
 // Logout clears whisper identities
 func (api *StatusAPI) Logout() error {
-	api.b.jailManager.Stop()
 	return api.b.Logout()
 }
 
@@ -156,24 +157,24 @@ func (api *StatusAPI) SendTransaction(ctx context.Context, args transactions.Sen
 	return api.b.SendTransaction(ctx, args)
 }
 
-// CompleteTransaction instructs backend to complete sending of a given transaction
-func (api *StatusAPI) CompleteTransaction(id string, password string) (gethcommon.Hash, error) {
-	return api.b.CompleteTransaction(id, password)
+// ApproveSignRequest instructs backend to complete sending of a given transaction
+func (api *StatusAPI) ApproveSignRequest(id string, password string) sign.Result {
+	return api.b.ApproveSignRequest(id, password)
 }
 
-// CompleteTransactions instructs backend to complete sending of multiple transactions
-func (api *StatusAPI) CompleteTransactions(ids []string, password string) map[string]sign.Result {
-	return api.b.CompleteTransactions(ids, password)
+// ApproveSignRequests instructs backend to complete sending of multiple transactions
+func (api *StatusAPI) ApproveSignRequests(ids []string, password string) map[string]sign.Result {
+	return api.b.ApproveSignRequests(ids, password)
 }
 
-// DiscardTransaction discards a given transaction from transaction queue
-func (api *StatusAPI) DiscardTransaction(id string) error {
-	return api.b.DiscardTransaction(id)
+// DiscardSignRequest discards a given transaction from transaction queue
+func (api *StatusAPI) DiscardSignRequest(id string) error {
+	return api.b.DiscardSignRequest(id)
 }
 
-// DiscardTransactions discards given multiple transactions from transaction queue
-func (api *StatusAPI) DiscardTransactions(ids []string) map[string]error {
-	return api.b.DiscardTransactions(ids)
+// DiscardSignRequests discards given multiple transactions from transaction queue
+func (api *StatusAPI) DiscardSignRequests(ids []string) map[string]error {
+	return api.b.DiscardSignRequests(ids)
 }
 
 // JailParse creates a new jail cell context, with the given chatID as identifier.
@@ -204,53 +205,18 @@ func (api *StatusAPI) SetJailBaseJS(js string) {
 	api.b.jailManager.SetBaseJS(js)
 }
 
-// Notify sends a push notification to the device with the given token.
-// @deprecated
-func (api *StatusAPI) Notify(token string) string {
-	api.log.Debug("Notify", "token", token)
-	message := "Hello World1"
-
-	tokens := []string{token}
-
-	err := api.b.newNotification().Send(message, fcm.NotificationPayload{}, tokens...)
-	if err != nil {
-		api.log.Error("Notify failed", "error", err)
-	}
-
-	return token
-}
-
 // NotifyUsers send notifications to users.
 func (api *StatusAPI) NotifyUsers(message string, payload fcm.NotificationPayload, tokens ...string) error {
-	api.log.Debug("Notify", "tokens", tokens)
-
-	err := api.b.newNotification().Send(message, payload, tokens...)
-	if err != nil {
-		api.log.Error("Notify failed", "error", err)
-	}
-
-	return err
+	return api.b.NotifyUsers(message, payload, tokens...)
 }
 
 // ConnectionChange handles network state changes logic.
 func (api *StatusAPI) ConnectionChange(typ string, expensive bool) {
-	state := ConnectionState{
-		Type:      NewConnectionType(typ),
-		Expensive: expensive,
-	}
-	if typ == "none" {
-		state.Offline = true
-	}
-	api.b.ConnectionChange(state)
+	api.b.ConnectionChange(typ, expensive)
 }
 
 // AppStateChange handles app state changes (background/foreground).
 // state values: see https://facebook.github.io/react-native/docs/appstate.html
 func (api *StatusAPI) AppStateChange(state string) {
-	appState, err := ParseAppState(state)
-	if err != nil {
-		log.Error("AppStateChange failed, ignoring", "error", err)
-		return // and do nothing
-	}
-	api.b.AppStateChange(appState)
+	api.b.AppStateChange(state)
 }

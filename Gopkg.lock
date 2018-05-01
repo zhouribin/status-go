@@ -91,6 +91,8 @@
     "core/vm",
     "crypto",
     "crypto/bn256",
+    "crypto/bn256/cloudflare",
+    "crypto/bn256/google",
     "crypto/ecies",
     "crypto/randentropy",
     "crypto/secp256k1",
@@ -114,6 +116,7 @@
     "log",
     "log/term",
     "metrics",
+    "metrics/exp",
     "miner",
     "node",
     "p2p",
@@ -126,11 +129,10 @@
     "rpc",
     "trie",
     "whisper/mailserver",
-    "whisper/whisperv5",
     "whisper/whisperv6"
   ]
-  revision = "1e67410e88d2685bc54611a7c9f75c327b553ccc"
-  version = "v1.8.1"
+  revision = "cbdaa0ca2a955012274bd2c47bd52b24b2beb66c"
+  version = "v1.8.5"
 
 [[projects]]
   name = "github.com/go-ole/go-ole"
@@ -285,14 +287,6 @@
   revision = "3101606756c53221ed58ba94ecba6b26adf89dcc"
 
 [[projects]]
-  name = "github.com/rcrowley/go-metrics"
-  packages = [
-    ".",
-    "exp"
-  ]
-  revision = "1f30fe9094a513ce4c700b9a54458bbb0c96996c"
-
-[[projects]]
   name = "github.com/rjeczalik/notify"
   packages = ["."]
   revision = "9d5aa0c3b735c3340018a4627446c3ea5a04a097"
@@ -351,7 +345,7 @@
     "leveldb/table",
     "leveldb/util"
   ]
-  revision = "b89cc31ef7977104127d34c1bd31ebd1a9db2199"
+  revision = "34011bf325bce385408353a30b101fe5e923eb6e"
 
 [[projects]]
   branch = "master"
@@ -489,6 +483,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "eff125b3ad51a2875bc0ee5f9d190ce65ee9fb774e79d8df0de7a7e4bf4e32f8"
+  inputs-digest = "749bac1b2eea5afcdd2fdca30c2d1b68763378c463f7c409742de028c4fe8402"
   solver-name = "gps-cdcl"
   solver-version = 1
