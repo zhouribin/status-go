@@ -7,8 +7,12 @@ import (
 	"io/ioutil"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 )
+
+// importsToFiles maps names of imports to a list of files importing them.
+type importsToFiles map[string][]string
 
 // scan retrieves go files and scans them for their imports.
 func scan() error {
@@ -21,11 +25,11 @@ func scan() error {
 		filenames = append(filenames, fs...)
 	}
 	fmt.Printf("fonud %d files ...\n", len(filenames))
-	imports, err := scanGoFiles(filenames)
+	intImports, extImports, err := scanGoFiles(filenames)
 	if err != nil {
 		return err
 	}
-	fmt.Printf("found %d unique imports ...\n", len(imports))
+	fmt.Printf("found %d internal and %d external imports ...\n", len(intImports), len(extImports))
 	return nil
 }
 
@@ -72,20 +76,24 @@ func findGoFiles(dir string) ([]string, error) {
 // scanGoFiles iterates over the given filenames, scan the files
 // for imports and creates a mapping with imports as key and
 // list of filenames importing it.
-func scanGoFiles(filenames []string) (map[string][]string, error) {
-	var imports map[string][]string
-	imports = make(map[string][]string)
+func scanGoFiles(filenames []string) (importsToFiles, importsToFiles, error) {
+	intImports := importsToFiles{}
+	extImports := importsToFiles{}
 	for _, filename := range filenames {
 		fileImports, err := scanGoFile(filename)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		// Map imports to filenames.
 		for _, fileImport := range fileImports {
-			imports[fileImport] = append(imports[fileImport], filename)
+			if strings.Contains(fileImport, ".") {
+				extImports[fileImport] = append(extImports[fileImport], filename)
+			} else {
+				intImports[fileImport] = append(extImports[fileImport], filename)
+			}
 		}
 	}
-	return imports, nil
+	return intImports, extImports, nil
 }
 
 // scanGoFile scans one go file for its imports.
@@ -110,7 +118,10 @@ func scanGoFile(filename string) ([]string, error) {
 		if tok == token.EOF {
 			break
 		} else if tok == token.IMPORT {
-			blockImports := scanImports(s)
+			blockImports, err := scanImports(s)
+			if err != nil {
+				return nil, err
+			}
 			imports = append(imports, blockImports...)
 		}
 	}
@@ -118,22 +129,30 @@ func scanGoFile(filename string) ([]string, error) {
 }
 
 // scanImports scans one individual or a group of imports in a file.
-func scanImports(s scanner.Scanner) []string {
+func scanImports(s scanner.Scanner) ([]string, error) {
 	var imports []string
 	_, tok, lit := s.Scan()
 	if tok == token.STRING {
 		// Only one direct import.
-		imports = append(imports, strings.Trim(lit, "\""))
+		imp, err := strconv.Unquote(lit)
+		if err != nil {
+			return nil, err
+		}
+		imports = append(imports, imp)
 	} else if tok == token.LPAREN {
 		// Block of imports.
 		for {
 			_, tok, lit = s.Scan()
 			if tok == token.STRING {
-				imports = append(imports, strings.Trim(lit, "\""))
+				imp, err := strconv.Unquote(lit)
+				if err != nil {
+					return nil, err
+				}
+				imports = append(imports, imp)
 			} else if tok == token.RPAREN {
 				break
 			}
 		}
 	}
-	return imports
+	return imports, nil
 }
