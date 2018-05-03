@@ -30,6 +30,8 @@ func scan() error {
 		return err
 	}
 	fmt.Printf("found %d internal and %d external imports ...\n", len(intImports), len(extImports))
+	tree := splitPackages(extImports)
+	fmt.Printf("package structure is %v\n", tree)
 	return nil
 }
 
