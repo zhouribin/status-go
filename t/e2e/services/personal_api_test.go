@@ -9,10 +9,8 @@ import (
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	acc "github.com/status-im/status-go/geth/account"
 	"github.com/status-im/status-go/geth/params"
-	"github.com/status-im/status-go/geth/signal"
 	"github.com/status-im/status-go/services/personal"
-	"github.com/status-im/status-go/sign"
-	e2e "github.com/status-im/status-go/t/e2e"
+	"github.com/status-im/status-go/signal"
 	"github.com/stretchr/testify/suite"
 
 	. "github.com/status-im/status-go/t/utils"
@@ -53,7 +51,7 @@ func TestPersonalSignSuiteUpstream(t *testing.T) {
 }
 
 type PersonalSignSuite struct {
-	e2e.BackendTestSuite
+	BaseJSONRPCSuite
 	upstream bool
 }
 
@@ -63,40 +61,22 @@ func (s *PersonalSignSuite) TestRestrictedPersonalAPIs() {
 		return
 	}
 
-	err := s.initTest(s.upstream)
+	err := s.SetupTest(s.upstream, false)
 	s.NoError(err)
 	defer func() {
 		err := s.Backend.StopNode()
 		s.NoError(err)
 	}()
 	// These personal APIs should be available
-	s.testAPIExported("personal_sign", true)
-	s.testAPIExported("personal_ecRecover", true)
+	s.AssertAPIMethodExported("personal_sign")
+	s.AssertAPIMethodExported("personal_ecRecover")
 	// These personal APIs shouldn't be exported
-	s.testAPIExported("personal_sendTransaction", false)
-	s.testAPIExported("personal_unlockAccount", false)
-	s.testAPIExported("personal_newAccount", false)
-	s.testAPIExported("personal_lockAccount", false)
-	s.testAPIExported("personal_listAccounts", false)
-	s.testAPIExported("personal_importRawKey", false)
-}
-
-func (s *PersonalSignSuite) testAPIExported(method string, expectExported bool) {
-	cmd := fmt.Sprintf(`{"jsonrpc":"2.0", "method": "%s", "params": []}`, method)
-
-	result := s.Backend.CallRPC(cmd)
-
-	var response struct {
-		Error *rpcError `json:"error"`
-	}
-
-	s.NoError(json.Unmarshal([]byte(result), &response))
-
-	hidden := (response.Error != nil && response.Error.Code == methodNotFoundErrorCode)
-
-	s.Equal(expectExported, !hidden,
-		"method %s should be %s, but it isn't",
-		method, map[bool]string{true: "exported", false: "hidden"}[expectExported])
+	s.AssertAPIMethodUnexported("personal_sendTransaction")
+	s.AssertAPIMethodUnexported("personal_unlockAccount")
+	s.AssertAPIMethodUnexported("personal_newAccount")
+	s.AssertAPIMethodUnexported("personal_lockAccount")
+	s.AssertAPIMethodUnexported("personal_listAccounts")
+	s.AssertAPIMethodUnexported("personal_importRawKey")
 }
 
 func (s *PersonalSignSuite) TestPersonalSignSuccess() {
@@ -142,12 +122,6 @@ func (s *PersonalSignSuite) TestPersonalSignNoAccountSelected() {
 }
 
 // Utility methods
-func (s *PersonalSignSuite) notificationHandlerSuccess(account string, pass string) func(string) {
-	return func(jsonEvent string) {
-		s.notificationHandler(account, pass, nil)(jsonEvent)
-	}
-}
-
 func (s *PersonalSignSuite) notificationHandlerWrongPassword(account string, pass string) func(string) {
 	return func(jsonEvent string) {
 		s.notificationHandler(account, pass+"wrong", keystore.ErrDecrypt)(jsonEvent)
@@ -171,7 +145,7 @@ func (s *PersonalSignSuite) notificationHandlerNoAccountSelected(account string,
 	return func(jsonEvent string) {
 		s.notificationHandler(account, pass, acc.ErrNoAccountSelected)(jsonEvent)
 		envelope := unmarshalEnvelope(jsonEvent)
-		if envelope.Type == sign.EventSignRequestAdded {
+		if envelope.Type == signal.EventSignRequestAdded {
 			err := s.Backend.SelectAccount(TestConfig.Account1.Address, TestConfig.Account1.Password)
 			s.NoError(err)
 		}
@@ -182,7 +156,7 @@ func (s *PersonalSignSuite) notificationHandlerNoAccountSelected(account string,
 func (s *PersonalSignSuite) notificationHandler(account string, pass string, expectedError error) func(string) {
 	return func(jsonEvent string) {
 		envelope := unmarshalEnvelope(jsonEvent)
-		if envelope.Type == sign.EventSignRequestAdded {
+		if envelope.Type == signal.EventSignRequestAdded {
 			event := envelope.Event.(map[string]interface{})
 			id := event["id"].(string)
 			s.T().Logf("Sign request added (will be completed shortly): {id: %s}\n", id)
@@ -217,7 +191,7 @@ func (s *PersonalSignSuite) testPersonalSign(testParams testParams) string {
 		testParams.HandlerFactory = s.notificationHandlerSuccess
 	}
 
-	err := s.initTest(s.upstream)
+	err := s.SetupTest(s.upstream, false)
 	s.NoError(err)
 	defer func() {
 		err := s.Backend.StopNode()
@@ -247,6 +221,15 @@ func (s *PersonalSignSuite) testPersonalSign(testParams testParams) string {
 	return ""
 }
 
+func (s *PersonalSignSuite) extractResultFromRPCResponse(response string) string {
+	var r struct {
+		Result string `json:"result"`
+	}
+	s.NoError(json.Unmarshal([]byte(response), &r))
+
+	return r.Result
+}
+
 func unmarshalEnvelope(jsonEvent string) signal.Envelope {
 	var envelope signal.Envelope
 	if e := json.Unmarshal([]byte(jsonEvent), &envelope); e != nil {
@@ -269,7 +252,7 @@ func (s *PersonalSignSuite) TestPersonalRecoverSuccess() {
 		return
 	}
 
-	err := s.initTest(s.upstream)
+	err := s.SetupTest(s.upstream, false)
 	s.NoError(err)
 	defer func() {
 		err := s.Backend.StopNode()
@@ -289,29 +272,8 @@ func (s *PersonalSignSuite) TestPersonalRecoverSuccess() {
 	s.True(strings.EqualFold(result, TestConfig.Account1.Address))
 }
 
-func (s *PersonalSignSuite) initTest(upstreamEnabled bool) error {
-	nodeConfig, err := MakeTestNodeConfig(GetNetworkID())
-	s.NoError(err)
-
-	nodeConfig.IPCEnabled = false
-	nodeConfig.HTTPHost = "" // to make sure that no HTTP interface is started
-
-	if upstreamEnabled {
-		networkURL, err := GetRemoteURL()
-		s.NoError(err)
-
-		nodeConfig.UpstreamConfig.Enabled = true
-		nodeConfig.UpstreamConfig.URL = networkURL
+func (s *BaseJSONRPCSuite) notificationHandlerSuccess(account string, pass string) func(string) {
+	return func(jsonEvent string) {
+		s.notificationHandler(account, pass, nil)(jsonEvent)
 	}
-
-	return s.Backend.StartNode(nodeConfig)
-}
-
-func (s *PersonalSignSuite) extractResultFromRPCResponse(response string) string {
-	var r struct {
-		Result string `json:"result"`
-	}
-	s.NoError(json.Unmarshal([]byte(response), &r))
-
-	return r.Result
 }
