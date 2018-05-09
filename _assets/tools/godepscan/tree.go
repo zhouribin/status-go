@@ -12,12 +12,22 @@ type packageNode struct {
 	children packageNodes
 }
 
+// IndentString returns a node as string with an indentation.
+func (n packageNode) IndentString(level int) string {
+	tabs := ""
+	for i := 0; i < level; i++ {
+		tabs += "\t"
+	}
+	s := fmt.Sprintf("%sNAME %s\n", tabs, n.name)
+	for _, child := range n.children {
+		s += fmt.Sprintf("%v", child.IndentString(level+1))
+	}
+	return s
+}
+
 // String implements fmt.Stringer.
 func (n packageNode) String() string {
-	if len(n.children) == 0 {
-		return fmt.Sprintf("{%v}", n.name)
-	}
-	return fmt.Sprintf("{%v %v}", n.name, n.children)
+	return n.IndentString(0)
 }
 
 // packageNodes is a list of package nodes.
