@@ -19,13 +19,15 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/p2p/nat"
-	"github.com/ethereum/go-ethereum/whisper/mailserver"
 	whisper "github.com/ethereum/go-ethereum/whisper/whisperv6"
 	"github.com/status-im/status-go/geth/params"
+	"github.com/status-im/status-go/mailserver"
 	shhmetrics "github.com/status-im/status-go/metrics/whisper"
 	"github.com/status-im/status-go/services/personal"
 	"github.com/status-im/status-go/services/shhext"
 	"github.com/status-im/status-go/services/status"
+	"github.com/status-im/status-go/timesource"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 // Errors related to node and services creation.
@@ -41,7 +43,7 @@ var (
 var logger = log.New("package", "status-go/geth/node")
 
 // MakeNode create a geth node entity
-func MakeNode(config *params.NodeConfig) (*node.Node, error) {
+func MakeNode(config *params.NodeConfig, db *leveldb.DB) (*node.Node, error) {
 	// If DataDir is empty, it means we want to create an ephemeral node
 	// keeping data only in memory.
 	if config.DataDir != "" {
@@ -91,7 +93,7 @@ func MakeNode(config *params.NodeConfig) (*node.Node, error) {
 	}
 
 	// start Whisper service.
-	if err := activateShhService(stack, config); err != nil {
+	if err := activateShhService(stack, config, db); err != nil {
 		return nil, fmt.Errorf("%v: %v", ErrWhisperServiceRegistrationFailure, err)
 	}
 
@@ -113,8 +115,8 @@ func defaultEmbeddedNodeConfig(config *params.NodeConfig) *node.Config {
 		Name:              config.Name,
 		Version:           config.Version,
 		P2P: p2p.Config{
-			NoDiscovery:     true,
-			DiscoveryV5:     config.Discovery,
+			NoDiscovery:     true, // we always use only v5 server
+			DiscoveryV5:     !config.NoDiscovery,
 			ListenAddr:      config.ListenAddr,
 			NAT:             nat.Any(),
 			MaxPeers:        config.MaxPeers,
@@ -187,16 +189,26 @@ func activateStatusService(stack *node.Node, config *params.NodeConfig) error {
 }
 
 // activateShhService configures Whisper and adds it to the given node.
-func activateShhService(stack *node.Node, config *params.NodeConfig) (err error) {
+func activateShhService(stack *node.Node, config *params.NodeConfig, db *leveldb.DB) (err error) {
 	if config.WhisperConfig == nil || !config.WhisperConfig.Enabled {
 		logger.Info("SHH protocol is disabled")
 		return nil
 	}
+	if err := stack.Register(func(*node.ServiceContext) (node.Service, error) {
+		return timesource.Default(), nil
+	}); err != nil {
+		return err
+	}
 
-	err = stack.Register(func(*node.ServiceContext) (node.Service, error) {
+	err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
+		var timeSource *timesource.NTPTimeSource
+		if err := ctx.Service(&timeSource); err != nil {
+			return nil, err
+		}
 		whisperServiceConfig := &whisper.Config{
 			MaxMessageSize:     whisper.DefaultMaxMessageSize,
 			MinimumAcceptedPOW: 0.001,
+			TimeSource:         timeSource.Now,
 		}
 		whisperService := whisper.New(whisperServiceConfig)
 
@@ -215,12 +227,15 @@ func activateShhService(stack *node.Node, config *params.NodeConfig) (err error)
 
 			var mailServer mailserver.WMailServer
 			whisperService.RegisterServer(&mailServer)
-			mailServer.Init(
+			err := mailServer.Init(
 				whisperService,
 				config.WhisperConfig.DataDir,
 				config.WhisperConfig.Password,
 				config.WhisperConfig.MinimumPoW,
 			)
+			if err != nil {
+				return nil, err
+			}
 		}
 
 		if config.WhisperConfig.LightClient {
@@ -243,7 +258,7 @@ func activateShhService(stack *node.Node, config *params.NodeConfig) (err error)
 			return nil, err
 		}
 
-		svc := shhext.New(whisper, shhext.EnvelopeSignalHandler{})
+		svc := shhext.New(whisper, shhext.EnvelopeSignalHandler{}, db)
 		return svc, nil
 	})
 }

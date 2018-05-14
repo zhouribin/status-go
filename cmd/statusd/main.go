@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"fmt"
 	stdlog "log"
@@ -37,12 +38,14 @@ var (
 	networkID         = flag.Int("networkid", params.RopstenNetworkID, "Network identifier (integer, 1=Homestead, 3=Ropsten, 4=Rinkeby, 777=StatusChain)")
 	lesEnabled        = flag.Bool("les", false, "Enable LES protocol")
 	whisperEnabled    = flag.Bool("shh", false, "Enable Whisper protocol")
+	statusService     = flag.String("status", "", `Enable StatusService, possible values: "ipc", "http"`)
 	swarmEnabled      = flag.Bool("swarm", false, "Enable Swarm protocol")
 	maxPeers          = flag.Int("maxpeers", 25, "maximum number of p2p peers (including all protocols)")
 	httpEnabled       = flag.Bool("http", false, "Enable HTTP RPC endpoint")
 	httpHost          = flag.String("httphost", "127.0.0.1", "HTTP RPC host of the listening socket")
 	httpPort          = flag.Int("httpport", params.HTTPPort, "HTTP RPC server's listening port")
 	ipcEnabled        = flag.Bool("ipc", false, "Enable IPC RPC endpoint")
+	ipcFile           = flag.String("ipcfile", "", "Set IPC file path")
 	cliEnabled        = flag.Bool("cli", false, "Enable debugging CLI server")
 	cliPort           = flag.String("cliport", debug.CLIPort, "CLI server's listening port")
 	pprofEnabled      = flag.Bool("pprof", false, "Enable runtime profiling via pprof")
@@ -93,7 +96,7 @@ func main() {
 
 	config, err := makeNodeConfig()
 	if err != nil {
-		stdlog.Fatalf("Making config failed %s", err)
+		stdlog.Fatalf("Making config failed, %s", err)
 	}
 
 	if *version {
@@ -245,6 +248,11 @@ func makeNodeConfig() (*params.NodeConfig, error) {
 	nodeConfig.HTTPPort = *httpPort
 	nodeConfig.IPCEnabled = *ipcEnabled
 
+	if *ipcFile != "" {
+		nodeConfig.IPCEnabled = true
+		nodeConfig.IPCFile = *ipcFile
+	}
+
 	nodeConfig.LightEthConfig.Enabled = *lesEnabled
 	nodeConfig.SwarmConfig.Enabled = *swarmEnabled
 
@@ -253,7 +261,7 @@ func makeNodeConfig() (*params.NodeConfig, error) {
 		nodeConfig.ClusterConfig.BootNodes = nil
 	}
 
-	nodeConfig.Discovery = *discovery
+	nodeConfig.NoDiscovery = !(*discovery)
 	nodeConfig.RequireTopics = map[discv5.Topic]params.Limits(searchTopics)
 	nodeConfig.RegisterTopics = []discv5.Topic(registerTopics)
 
@@ -263,6 +271,11 @@ func makeNodeConfig() (*params.NodeConfig, error) {
 		nodeConfig.ClusterConfig.BootNodes = strings.Split(*bootnodes, ",")
 	}
 
+	nodeConfig, err = configureStatusService(*statusService, nodeConfig)
+	if err != nil {
+		return nil, err
+	}
+
 	if *whisperEnabled {
 		return whisperConfig(nodeConfig)
 	}
@@ -270,6 +283,32 @@ func makeNodeConfig() (*params.NodeConfig, error) {
 	// RPC configuration
 	if !*httpEnabled {
 		nodeConfig.HTTPHost = "" // HTTP RPC is disabled
+	}
+
+	return nodeConfig, nil
+}
+
+var errStatusServiceRequiresIPC = errors.New("to enable the StatusService on IPC, -ipc flag must be set")
+var errStatusServiceRequiresHTTP = errors.New("to enable the StatusService on HTTP, -http flag must be set")
+var errStatusServiceInvalidFlag = errors.New("-status flag valid values are: ipc, http")
+
+func configureStatusService(flagValue string, nodeConfig *params.NodeConfig) (*params.NodeConfig, error) {
+	switch flagValue {
+	case "ipc":
+		if !nodeConfig.IPCEnabled {
+			return nil, errStatusServiceRequiresIPC
+		}
+		nodeConfig.StatusServiceEnabled = true
+	case "http":
+		if !nodeConfig.RPCEnabled {
+			return nil, errStatusServiceRequiresHTTP
+		}
+		nodeConfig.StatusServiceEnabled = true
+		nodeConfig.AddAPIModule("status")
+	case "":
+		nodeConfig.StatusServiceEnabled = false
+	default:
+		return nil, errStatusServiceInvalidFlag
 	}
 
 	return nodeConfig, nil

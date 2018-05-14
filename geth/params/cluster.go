@@ -2,13 +2,16 @@ package params
 
 type cluster struct {
 	NetworkID   int      `json:"networkID"`
-	Discovery   bool     `json:"discovery"`
 	StaticNodes []string `json:"staticnodes"`
 	BootNodes   []string `json:"bootnodes"`
 }
 
 var ropstenCluster = cluster{
 	NetworkID: 3,
+	BootNodes: []string{
+		"enode://f32efef2739e5135a0f9a80600b321ba4d13393a5f1d3f5f593df85919262f06c70bfa66d38507b9d79a91021f5e200ec20150592e72934c66248e87014c4317@167.99.209.79:30404",
+		"enode://90d7e7e34f588b44e1e07adfc6453b0d27946883420a012a837f6acfa66cbb28e6e8b5df3c0e26615ed82b32273453b1b003e4aa5c0d357ada30bde8f666db47@167.99.46.141:30404",
+	},
 	StaticNodes: []string{
 		"enode://dffef3874011709b12d1e540d83ddb19a9db8614ad9151d05bcf813585e45cbebba5aaea223fe315786c401d8cecb1ad2de9f179680c536ea30311fb21fa934b@188.166.100.178:30303",
 		"enode://03f3661686d30509d621dbe5ee2e3082923f25e94fd41a2dd8dd34bb12a0c4e8fbde52247c6c55e86dc209a8e7c4a5ae56058c65f7b01734d3ab73818b44e2a3@188.166.33.47:30303",
@@ -17,7 +20,6 @@ var ropstenCluster = cluster{
 
 var rinkebyCluster = cluster{
 	NetworkID: 4,
-	Discovery: true,
 	BootNodes: []string{
 		"enode://1b843c7697f6fc42a1f606fb3cfaac54e025f06789dc20ad9278be3388967cf21e3a1b1e4be51faecd66c2c3adef12e942b4fcdeb8727657abe60636efb6224f@206.189.6.46:30404",
 		"enode://b29100c8468e3e6604817174a15e4d71627458b0dcdbeea169ab2eb4ab2bbc6f24adbb175826726cec69db8fdba6c0dd60b3da598e530ede562180d300728659@206.189.6.48:30404",
@@ -30,6 +32,10 @@ var rinkebyCluster = cluster{
 
 var mainnetCluster = cluster{
 	NetworkID: 1,
+	BootNodes: []string{
+		"enode://f32efef2739e5135a0f9a80600b321ba4d13393a5f1d3f5f593df85919262f06c70bfa66d38507b9d79a91021f5e200ec20150592e72934c66248e87014c4317@167.99.209.79:30404",
+		"enode://90d7e7e34f588b44e1e07adfc6453b0d27946883420a012a837f6acfa66cbb28e6e8b5df3c0e26615ed82b32273453b1b003e4aa5c0d357ada30bde8f666db47@167.99.46.141:30404",
+	},
 	StaticNodes: []string{
 		"enode://3aeaff0868b19e03fabe33e6e0fcc821094e1601be44edd6f45e3f0171ed964e13623e49987bddd6c517304d2a45dfe66da51e47b2e11d59c4b30cd6094db43d@163.172.176.22:30303",
 		"enode://687343483ca41132a16c9ab67b49e9997a34ec38ddb6dd60bf45f9a0ea4c50362f902553d813af44ab1cdb246fc384d4c74b4437c15cefe3bb0e87b399dbb5bb@163.172.176.22:30403",

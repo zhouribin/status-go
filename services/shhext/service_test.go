@@ -66,7 +66,7 @@ func (s *ShhExtSuite) SetupTest() {
 		s.NoError(stack.Register(func(n *node.ServiceContext) (node.Service, error) {
 			return s.whisper[i], nil
 		}))
-		s.services[i] = New(s.whisper[i], nil)
+		s.services[i] = New(s.whisper[i], nil, nil)
 		s.NoError(stack.Register(func(n *node.ServiceContext) (node.Service, error) {
 			return s.services[i], nil
 		}))
@@ -96,7 +96,7 @@ func (s *ShhExtSuite) TestPostMessageWithConfirmation() {
 	select {
 	case confirmed := <-mock.confirmations:
 		s.Equal(hash, confirmed)
-	case <-time.After(time.Second):
+	case <-time.After(5 * time.Second):
 		s.Fail("timed out while waiting for confirmation")
 	}
 }
@@ -123,16 +123,9 @@ func (s *ShhExtSuite) TestWaitMessageExpired() {
 		s.Equal(hash, expired)
 	case confirmed := <-mock.confirmations:
 		s.Fail("unexpected confirmation for hash", confirmed)
-	case <-time.After(2 * time.Second):
+	case <-time.After(10 * time.Second):
 		s.Fail("timed out while waiting for confirmation")
 	}
-}
-
-func (s *ShhExtSuite) TestRequestMessagesDefaults() {
-	r := MessagesRequest{}
-	r.setDefaults()
-	s.NotZero(r.From)
-	s.InEpsilon(uint32(time.Now().UTC().Unix()), r.To, 1.0)
 }
 
 func (s *ShhExtSuite) TestRequestMessages() {
@@ -159,7 +152,7 @@ func (s *ShhExtSuite) TestRequestMessages() {
 	}()
 
 	mock := newHandlerMock(1)
-	service := New(shh, mock)
+	service := New(shh, mock, nil)
 	api := NewPublicAPI(service)
 
 	const (
