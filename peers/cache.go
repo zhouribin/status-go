@@ -46,7 +46,7 @@ func (d *Cache) GetPeersRange(topic discv5.Topic, limit int) (nodes []*discv5.No
 		node := discv5.Node{}
 		value := iterator.Value()
 		if err := node.UnmarshalText(value); err != nil {
-			log.Error("can't unmarshal node", "value", value, "error", err)
+			log.Error("can't unmarshal node", "value", value, "error", err, "topic", topic, "key", key)
 			continue
 		}
 		nodes = append(nodes, &node)
