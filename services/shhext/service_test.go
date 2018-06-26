@@ -183,6 +183,14 @@ func (s *ShhExtSuite) TestRequestMessages() {
 	s.Contains(err.Error(), "Could not find peer with ID")
 	s.False(result)
 
+	// from is greater than to
+	hash, err = api.RequestMessages(context.TODO(), MessagesRequest{
+		From: 10,
+		To:   5,
+	})
+	s.Contains(err.Error(), "Query range is invalid: from > to (10 > 5)")
+	s.Nil(hash)
+
 	// with a peer acting as a mailserver
 	// prepare a node first
 	mailNode, err := node.New(&node.Config{
