@@ -27,7 +27,7 @@ ignored = [ "github.com/ethereum/go-ethereum/ethapi" ]
 
 [[constraint]]
   name = "github.com/ethereum/go-ethereum"
-  version = "v1.8.5"
+  branch = "master"
 
 [[constraint]]
   # used only to embed web3js code with particular version

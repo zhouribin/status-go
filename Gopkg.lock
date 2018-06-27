@@ -47,6 +47,7 @@
   revision = "935e0e8a636ca4ba70b713f3e38a19e1b77739e8"
 
 [[projects]]
+  branch = "master"
   name = "github.com/ethereum/go-ethereum"
   packages = [
     ".",
@@ -112,8 +113,7 @@
     "trie",
     "whisper/whisperv6"
   ]
-  revision = "dea1ce052a10cd7d401a5c04f83f371a06fe293c"
-  version = "v1.8.11"
+  revision = "e916f9786dd318ec873cab21c8092d4da2c8dd54"
 
 [[projects]]
   branch = "master"
@@ -421,6 +421,6 @@
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "4bb7fa15b76f4e97c720c5d161faaa6594cd846bb24271009239dbb87d3399bf"
+  inputs-digest = "c73544dcc4eec65d2fe2c5c09a01432c301c8f8b8b7cef5ae16f44c631efbf3a"
   solver-name = "gps-cdcl"
   solver-version = 1
