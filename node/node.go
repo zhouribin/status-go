@@ -35,6 +35,7 @@ import (
 var (
 	ErrNodeMakeFailure                    = errors.New("error creating p2p node")
 	ErrWhisperServiceRegistrationFailure  = errors.New("failed to register the Whisper service")
+	ErrPSSServiceRegistrationFailure      = errors.New("failed to register the PSS service")
 	ErrLightEthRegistrationFailure        = errors.New("failed to register the LES service")
 	ErrPersonalServiceRegistrationFailure = errors.New("failed to register the personal api service")
 	ErrStatusServiceRegistrationFailure   = errors.New("failed to register the Status service")
@@ -91,6 +92,11 @@ func MakeNode(config *params.NodeConfig, db *leveldb.DB) (*node.Node, error) {
 		if err := activatePersonalService(stack, config); err != nil {
 			return nil, fmt.Errorf("%v: %v", ErrPersonalServiceRegistrationFailure, err)
 		}
+	}
+
+	// start PSS service.
+	if err := activatePssService(stack, config); err != nil {
+		return nil, fmt.Errorf("%v: %v", ErrPSSServiceRegistrationFailure, err)
 	}
 
 	// start Whisper service.
