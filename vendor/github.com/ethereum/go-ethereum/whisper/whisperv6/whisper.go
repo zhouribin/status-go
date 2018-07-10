@@ -827,6 +827,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				}
 				whisper.postEvent(&envelope, true)
 				whisper.traceEnvelope(&envelope, false, p2pSource, p)
+				fmt.Printf(">>> RECEIVED P2P ENV: %x\n", envelope.Hash())
 			}
 		case p2pRequestCode:
 			// Must be processed if mail server is implemented. Otherwise ignore.
@@ -1033,6 +1034,7 @@ func (whisper *Whisper) processQueue() {
 				Hash:  e.Hash(),
 				Event: EventEnvelopeAvailable,
 			})
+			fmt.Printf(">>> ENVELOPE AVAILABLE: %x\n", e.Hash())
 
 		case e = <-whisper.p2pMsgQueue:
 			whisper.filters.NotifyWatchers(e, true)
@@ -1040,6 +1042,7 @@ func (whisper *Whisper) processQueue() {
 				Hash:  e.Hash(),
 				Event: EventEnvelopeAvailable,
 			})
+			fmt.Printf(">>> ENVELOPE AVAILABLE: %x\n", e.Hash())
 		}
 	}
 }

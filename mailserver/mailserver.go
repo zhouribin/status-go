@@ -213,6 +213,7 @@ func (s *WMailServer) Archive(env *whisper.Envelope) {
 
 	key := NewDbKey(env.Expiry-env.TTL, env.Hash())
 	rawEnvelope, err := rlp.EncodeToBytes(env)
+	fmt.Printf(">>> ARCHIVING: %x\n", env.Hash())
 	if err != nil {
 		log.Error(fmt.Sprintf("rlp.EncodeToBytes failed: %s", err))
 		archivedErrorsCounter.Inc(1)
@@ -223,6 +224,7 @@ func (s *WMailServer) Archive(env *whisper.Envelope) {
 		}
 		archivedMeter.Mark(1)
 		archivedSizeMeter.Mark(int64(whisper.EnvelopeHeaderLength + len(env.Data)))
+		fmt.Printf(">>> ARCHIVED: %x\n", env.Hash())
 	}
 }
 
@@ -316,6 +318,7 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, bl
 			continue
 		}
 
+		fmt.Printf(">>> SENDING ARCHIVED ENV: %x\n", envelope.Hash())
 		if whisper.BloomFilterMatch(bloom, envelope.Bloom()) {
 			if peer == nil {
 				// used for test purposes
@@ -327,6 +330,7 @@ func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, bl
 					return
 				}
 				lastEnvelopeHash = envelope.Hash()
+				fmt.Printf(">>> SENT ARCHIVED ENV: %x\n", envelope.Hash())
 			}
 			sentEnvelopes++
 			sentEnvelopesSize += whisper.EnvelopeHeaderLength + int64(len(envelope.Data))
