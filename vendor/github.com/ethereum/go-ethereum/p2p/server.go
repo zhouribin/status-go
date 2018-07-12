@@ -157,6 +157,8 @@ type Server struct {
 	running bool
 
 	ntab         discoverTable
+	conn         *net.UDPConn
+	unhandled    chan discover.ReadPacket
 	listener     net.Listener
 	ourHandshake *protoHandshake
 	lastLookup   time.Time
@@ -448,6 +450,7 @@ func (srv *Server) Start() (err error) {
 
 	// node table
 	if !srv.NoDiscovery {
+		unhandled := make(chan discover.ReadPacket, 100)
 		cfg := discover.Config{
 			PrivateKey:   srv.PrivateKey,
 			AnnounceAddr: realaddr,
@@ -461,6 +464,8 @@ func (srv *Server) Start() (err error) {
 			return err
 		}
 		srv.ntab = ntab
+		srv.conn = conn
+		srv.unhandled = unhandled
 	}
 
 	if srv.DiscoveryV5 {
@@ -504,6 +509,16 @@ func (srv *Server) Start() (err error) {
 	go srv.run(dialer)
 	srv.running = true
 	return nil
+}
+
+// Conn return a UPD connection if server is listening.
+func (srv *Server) Conn() *net.UDPConn {
+	return srv.conn
+}
+
+// Unhandled return a channel with unhandled packets by discovery.
+func (srv *Server) Unhandled() chan discover.ReadPacket {
+	return srv.unhandled
 }
 
 func (srv *Server) startListening() error {

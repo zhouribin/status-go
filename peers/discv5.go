@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/log"
+	"github.com/ethereum/go-ethereum/p2p/discover"
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 )
 
@@ -20,10 +21,12 @@ type Discovery interface {
 }
 
 // NewDiscV5 creates instances of discovery v5 facade.
-func NewDiscV5(prv *ecdsa.PrivateKey, laddr string, bootnodes []*discv5.Node) *DiscV5 {
+func NewDiscV5(prv *ecdsa.PrivateKey, laddr string, bootnodes []*discv5.Node, conn *net.UDPConn, unhandled chan discover.ReadPacket) *DiscV5 {
 	return &DiscV5{
 		prv:       prv,
 		laddr:     laddr,
+		conn:      conn,
+		unhandled: unhandled,
 		bootnodes: bootnodes,
 	}
 }
@@ -35,6 +38,8 @@ type DiscV5 struct {
 
 	prv       *ecdsa.PrivateKey
 	laddr     string
+	conn      *net.UDPConn
+	unhandled chan discover.ReadPacket
 	bootnodes []*discv5.Node
 }
 
@@ -54,19 +59,34 @@ func (d *DiscV5) Start() error {
 	if err != nil {
 		return err
 	}
-	conn, err := net.ListenUDP("udp", addr)
-	if err != nil {
-		return err
+
+	var ntab *discv5.Network
+
+	if d.conn == nil {
+		conn, err := net.ListenUDP("udp", addr)
+		if err != nil {
+			return err
+		}
+
+		realaddr := conn.LocalAddr().(*net.UDPAddr)
+		ntab, err = discv5.ListenUDP(d.prv, conn, realaddr, "", nil)
+		if err != nil {
+			return err
+		}
+	} else {
+		sconn := sharedUDPConn{d.conn, d.unhandled}
+		realaddr := sconn.LocalAddr().(*net.UDPAddr)
+		ntab, err = discv5.ListenUDP(d.prv, &sconn, realaddr, "", nil)
+		if err != nil {
+			return err
+		}
 	}
-	realaddr := conn.LocalAddr().(*net.UDPAddr)
-	ntab, err := discv5.ListenUDP(d.prv, conn, realaddr, "", nil)
-	if err != nil {
-		return err
-	}
+
 	if err := ntab.SetFallbackNodes(d.bootnodes); err != nil {
 		return err
 	}
 	d.net = ntab
+
 	return nil
 }
 

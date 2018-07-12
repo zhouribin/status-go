@@ -116,7 +116,7 @@ func defaultEmbeddedNodeConfig(config *params.NodeConfig) *node.Config {
 		Name:              config.Name,
 		Version:           config.Version,
 		P2P: p2p.Config{
-			NoDiscovery:     true, // we always use only v5 server
+			NoDiscovery:     false, // we always use only v5 server
 			ListenAddr:      config.ListenAddr,
 			NAT:             nat.Any(),
 			MaxPeers:        config.MaxPeers,
@@ -134,6 +134,7 @@ func defaultEmbeddedNodeConfig(config *params.NodeConfig) *node.Config {
 	}
 
 	if config.ClusterConfig != nil && config.ClusterConfig.Enabled {
+		nc.P2P.BootstrapNodes = parseNodes(config.ClusterConfig.BootNodes)
 		nc.P2P.BootstrapNodesV5 = parseNodesV5(config.ClusterConfig.BootNodes)
 		nc.P2P.StaticNodes = parseNodes(config.ClusterConfig.StaticNodes)
 	}

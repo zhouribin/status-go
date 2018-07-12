@@ -185,7 +185,9 @@ func (n *StatusNode) startDiscovery() error {
 	n.discovery = peers.NewDiscV5(
 		n.gethNode.Server().PrivateKey,
 		n.config.ListenAddr,
-		parseNodesV5(n.config.ClusterConfig.BootNodes))
+		parseNodesV5(n.config.ClusterConfig.BootNodes),
+		n.gethNode.Server().Conn(),
+		n.gethNode.Server().Unhandled())
 	n.register = peers.NewRegister(n.discovery, n.config.RegisterTopics...)
 	options := peers.NewDefaultOptions()
 	// TODO(dshulyak) consider adding a flag to define this behaviour
