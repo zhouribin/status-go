@@ -1,0 +1,68 @@
+#!/usr/bin/env groovy
+
+parameters {
+  string(
+    name: 'DOCKER_TAG',
+    defaultValue: "deploy-staging",
+    description: 'Under what tag to push the docker image.'
+  )
+}
+
+properties([disableConcurrentBuilds()])
+
+node('linux') {
+
+  def node_image_name = 'statusteam/status-go'
+  def boot_image_name = 'statusteam/bootnode'
+  def commit
+  def node_image
+  def boot_image
+  def tstamp = Calendar.getInstance().getTime().format(
+    'YYYYMMdd-hhmmss',TimeZone.getTimeZone('UTC')
+  )
+
+  stage('Git Prep') {
+    checkout scm
+    commit = sh(
+      returnStdout: true,
+      script: 'git rev-parse --short HEAD'
+    ).trim()
+    build_tags = sh(
+      returnStdout: true,
+      script:  './_assets/ci/get-docker-image-tag.sh'
+    ).trim()
+    build_flags = "-ldflags='-X main.buildStamp=${tstamp}' "
+    build_flags += "-ldflags='-X github.com/status-im/status-go/params.VersionMeta=${commit}'"
+  }
+
+  stage('Build stausd') {
+    node_image = docker.build(
+      node_image_name + ':' + commit, (
+      "--build-arg git_commit=${commit} " +
+      "--build-arg build_tags=\"${build_tags}\" " +
+      "--build-arg build_flags=\"${build_flags}\" " +
+      '-f _assets/build/Dockerfile .')
+    )
+  }
+
+  stage('Build bootnode') {
+    boot_image = docker.build(
+      boot_image_name + ':' + commit, (
+      "--build-arg git_commit=${commit} " +
+      "--build-arg build_tags=\"${build_tags}\" " +
+      "--build-arg build_flags=\"${build_flags}\" " +
+      '-f _assets/build/Dockerfile-bootnode .')
+    )
+  }
+
+  stage('Publish') {
+    withDockerRegistry([
+      credentialsId: "dockerhub-statusteam-auto", url: ""
+    ]) {
+      node_image.push()
+      node_image.push(params.DOCKER_TAG)
+      boot_image.push()
+      boot_image.push(params.DOCKER_TAG)
+    }
+  }
+}
