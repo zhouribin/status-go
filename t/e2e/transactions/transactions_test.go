@@ -40,7 +40,14 @@ type TransactionsTestSuite struct {
 	e2e.BackendTestSuite
 }
 
-func (s *TransactionsTestSuite) TestCallRPCSendTransaction() {
+func (s *TransactionsTestSuite) TestCallRPCSendTransactionPublicRPC() {
+	s.testCallRPCSendTransaction(false)
+}
+func (s *TransactionsTestSuite) TestCallRPCSendTransactionPrivateRPC() {
+	s.testCallRPCSendTransaction(true)
+}
+
+func (s *TransactionsTestSuite) testCallRPCSendTransaction(private bool) {
 	CheckTestSkipForNetworks(s.T(), params.MainNetworkID)
 
 	s.StartTestBackend()
@@ -72,7 +79,12 @@ func (s *TransactionsTestSuite) TestCallRPCSendTransaction() {
 		}
 	})
 
-	result := s.Backend.CallRPC(`{
+	callRPC := s.Backend.CallRPC
+	if private {
+		callRPC = s.Backend.CallPrivateRPC
+	}
+
+	result := callRPC(`{
 		"jsonrpc": "2.0",
 		"id": 1,
 		"method": "eth_sendTransaction",
@@ -93,7 +105,14 @@ func (s *TransactionsTestSuite) TestCallRPCSendTransaction() {
 	s.Equal(`{"jsonrpc":"2.0","id":1,"result":"`+signResult.Response.Hash().Hex()+`"}`, result)
 }
 
-func (s *TransactionsTestSuite) TestCallRPCSendTransactionUpstream() {
+func (s *TransactionsTestSuite) TestCallRPCSendTransactionUpstreamPublicRPC() {
+	s.testCallRPCSendTransactionUpstream(false)
+}
+func (s *TransactionsTestSuite) TestCallRPCSendTransactionUpstreamPrivateRPC() {
+	s.testCallRPCSendTransactionUpstream(true)
+}
+
+func (s *TransactionsTestSuite) testCallRPCSendTransactionUpstream(private bool) {
 	CheckTestSkipForNetworks(s.T(), params.MainNetworkID, params.StatusChainNetworkID)
 
 	addr, err := GetRemoteURL()
@@ -128,7 +147,12 @@ func (s *TransactionsTestSuite) TestCallRPCSendTransactionUpstream() {
 		}
 	})
 
-	result := s.Backend.CallRPC(`{
+	callRPC := s.Backend.CallRPC
+	if private {
+		callRPC = s.Backend.CallPrivateRPC
+	}
+
+	result := callRPC(`{
 		"jsonrpc": "2.0",
 		"id": 1,
 		"method": "eth_sendTransaction",
