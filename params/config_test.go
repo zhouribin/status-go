@@ -18,6 +18,7 @@ import (
 
 var clusterConfigData = []byte(`{
 	"ClusterConfig": {
+        "networkID": 3,
 		"staticnodes": [
 			"enode://7ab298cedc4185a894d21d8a4615262ec6bdce66c9b6783878258e0d5b31013d30c9038932432f70e5b2b6a5cd323bf820554fcb22fbc7b45367889522e9c449@10.1.1.1:30303",
 			"enode://f59e8701f18c79c5cbc7618dc7bb928d44dc2f5405c7d693dad97da2d8585975942ec6fd36d3fe608bfdc7270a34a4dd00f38cfe96b2baa24f7cd0ac28d382a1@10.1.1.2:30303"
@@ -99,6 +100,7 @@ func TestLoadNodeConfigFromFile(t *testing.T) {
 	c, err := params.NewConfigFromJSON(`{
 		"NetworkId": 3,
 		"DataDir": "` + tmpDir + `",
+		"NoBackupDataDir": "` + tmpDir + `",
 		"KeyStoreDir": "` + tmpDir + `",
 		"NoDiscovery": true
 	}`)
@@ -328,6 +330,7 @@ func TestConfigWriteRead(t *testing.T) {
 	loadedConfig := string(loadedConfigData)
 	require.Contains(t, loadedConfig, fmt.Sprintf(`"NetworkId": %d`, params.RopstenNetworkID))
 	require.Contains(t, loadedConfig, fmt.Sprintf(`"DataDir": "%s"`, tmpDir))
+	require.Contains(t, loadedConfig, fmt.Sprintf(`"NoBackupDataDir": "%s"`, tmpDir))
 	require.Contains(t, loadedConfig, fmt.Sprintf(`"Fleet": "%s"`, params.FleetBeta))
 }
 
@@ -345,6 +348,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/tmp/data",
+				"NoBackupDataDir": "/tmp/data",
 				"KeyStoreDir": "/tmp/data",
 				"NoDiscovery": true
 			}`,
@@ -363,9 +367,10 @@ func TestNodeConfigValidate(t *testing.T) {
 			Name:   "Validate all required fields",
 			Config: `{}`,
 			FieldErrors: map[string]string{
-				"NetworkID":   "required",
-				"DataDir":     "required",
-				"KeyStoreDir": "required",
+				"NetworkID":       "required",
+				"DataDir":         "required",
+				"NoBackupDataDir": "required",
+				"KeyStoreDir":     "required",
 			},
 		},
 		{
@@ -373,6 +378,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
+				"NoBackupDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"Name": "invalid/name"
 			}`,
@@ -385,6 +391,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
+				"NoBackupDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"NodeKey": "foo"
@@ -396,6 +403,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
+				"NoBackupDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"UpstreamConfig": {
@@ -410,6 +418,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
+				"NoBackupDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"UpstreamConfig": {
@@ -423,6 +432,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
+				"NoBackupDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"UpstreamConfig": {
@@ -436,6 +446,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
+				"NoBackupDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"ClusterConfig": {
@@ -449,6 +460,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
+				"NoBackupDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": false
 			}`,
@@ -459,6 +471,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
+				"NoBackupDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"Rendezvous": true 
@@ -470,6 +483,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
+				"NoBackupDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"Rendezvous": false,
@@ -484,6 +498,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
+				"NoBackupDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"WhisperConfig": {
@@ -499,6 +514,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
+				"NoBackupDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"WhisperConfig": {
@@ -517,6 +533,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
+				"NoBackupDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"WhisperConfig": {
@@ -532,6 +549,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
+				"NoBackupDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"WhisperConfig": {
@@ -547,6 +565,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
+				"NoBackupDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"WhisperConfig": {
@@ -565,6 +584,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
+				"NoBackupDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"WhisperConfig": {

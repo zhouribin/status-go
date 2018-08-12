@@ -169,6 +169,8 @@ type NodeConfig struct {
 
 	// DataDir is the file system folder the node should use for any data storage needs.
 	DataDir string `validate:"required"`
+	// NoBackupDataDir is the file system folder the node should use for any data storage needs that it doesn't want backed up.
+	NoBackupDataDir string `validate:"required"`
 
 	// KeyStoreDir is the file system folder that contains private keys.
 	KeyStoreDir string `validate:"required"`
@@ -350,6 +352,7 @@ func NewNodeConfig(dataDir, fleet string, networkID uint64) (*NodeConfig, error)
 	nodeConfig := &NodeConfig{
 		NetworkID:       networkID,
 		DataDir:         dataDir,
+		NoBackupDataDir: dataDir,
 		Version:         Version,
 		RPCEnabled:      false,
 		HTTPHost:        "localhost",
