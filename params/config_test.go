@@ -100,7 +100,7 @@ func TestLoadNodeConfigFromFile(t *testing.T) {
 	c, err := params.NewConfigFromJSON(`{
 		"NetworkId": 3,
 		"DataDir": "` + tmpDir + `",
-		"NoBackupDataDir": "` + tmpDir + `",
+		"BackupDisabledDataDir": "` + tmpDir + `",
 		"KeyStoreDir": "` + tmpDir + `",
 		"NoDiscovery": true
 	}`)
@@ -330,7 +330,7 @@ func TestConfigWriteRead(t *testing.T) {
 	loadedConfig := string(loadedConfigData)
 	require.Contains(t, loadedConfig, fmt.Sprintf(`"NetworkId": %d`, params.RopstenNetworkID))
 	require.Contains(t, loadedConfig, fmt.Sprintf(`"DataDir": "%s"`, tmpDir))
-	require.Contains(t, loadedConfig, fmt.Sprintf(`"NoBackupDataDir": "%s"`, tmpDir))
+	require.Contains(t, loadedConfig, fmt.Sprintf(`"BackupDisabledDataDir": "%s"`, tmpDir))
 	require.Contains(t, loadedConfig, fmt.Sprintf(`"Fleet": "%s"`, params.FleetBeta))
 }
 
@@ -348,7 +348,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/tmp/data",
-				"NoBackupDataDir": "/tmp/data",
+				"BackupDisabledDataDir": "/tmp/data",
 				"KeyStoreDir": "/tmp/data",
 				"NoDiscovery": true
 			}`,
@@ -367,10 +367,10 @@ func TestNodeConfigValidate(t *testing.T) {
 			Name:   "Validate all required fields",
 			Config: `{}`,
 			FieldErrors: map[string]string{
-				"NetworkID":       "required",
-				"DataDir":         "required",
-				"NoBackupDataDir": "required",
-				"KeyStoreDir":     "required",
+				"NetworkID":             "required",
+				"DataDir":               "required",
+				"BackupDisabledDataDir": "required",
+				"KeyStoreDir":           "required",
 			},
 		},
 		{
@@ -378,7 +378,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
-				"NoBackupDataDir": "/some/dir",
+				"BackupDisabledDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"Name": "invalid/name"
 			}`,
@@ -391,7 +391,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
-				"NoBackupDataDir": "/some/dir",
+				"BackupDisabledDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"NodeKey": "foo"
@@ -403,7 +403,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
-				"NoBackupDataDir": "/some/dir",
+				"BackupDisabledDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"UpstreamConfig": {
@@ -418,7 +418,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
-				"NoBackupDataDir": "/some/dir",
+				"BackupDisabledDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"UpstreamConfig": {
@@ -432,7 +432,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
-				"NoBackupDataDir": "/some/dir",
+				"BackupDisabledDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"UpstreamConfig": {
@@ -446,7 +446,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
-				"NoBackupDataDir": "/some/dir",
+				"BackupDisabledDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"ClusterConfig": {
@@ -460,7 +460,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
-				"NoBackupDataDir": "/some/dir",
+				"BackupDisabledDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": false
 			}`,
@@ -471,7 +471,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
-				"NoBackupDataDir": "/some/dir",
+				"BackupDisabledDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"Rendezvous": true 
@@ -483,7 +483,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
-				"NoBackupDataDir": "/some/dir",
+				"BackupDisabledDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"Rendezvous": false,
@@ -498,7 +498,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
-				"NoBackupDataDir": "/some/dir",
+				"BackupDisabledDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"WhisperConfig": {
@@ -514,7 +514,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
-				"NoBackupDataDir": "/some/dir",
+				"BackupDisabledDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"WhisperConfig": {
@@ -533,7 +533,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
-				"NoBackupDataDir": "/some/dir",
+				"BackupDisabledDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"WhisperConfig": {
@@ -549,7 +549,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
-				"NoBackupDataDir": "/some/dir",
+				"BackupDisabledDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"WhisperConfig": {
@@ -565,7 +565,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
-				"NoBackupDataDir": "/some/dir",
+				"BackupDisabledDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"WhisperConfig": {
@@ -584,7 +584,7 @@ func TestNodeConfigValidate(t *testing.T) {
 			Config: `{
 				"NetworkId": 1,
 				"DataDir": "/some/dir",
-				"NoBackupDataDir": "/some/dir",
+				"BackupDisabledDataDir": "/some/dir",
 				"KeyStoreDir": "/some/dir",
 				"NoDiscovery": true,
 				"WhisperConfig": {
@@ -595,6 +595,22 @@ func TestNodeConfigValidate(t *testing.T) {
 				}
 			}`,
 			Error: "WhisperConfig.MailServerAsymKey is invalid",
+		},
+		{
+			Name: "Validate that PFSEnabled & InstallationID are checked for validity",
+			Config: `{
+				"NetworkId": 1,
+				"DataDir": "/some/dir",
+				"PFSEnabled": true,
+				"BackupDisabledDataDir": "/some/dir",
+				"KeyStoreDir": "/some/dir",
+				"NoDiscovery": true,
+				"WhisperConfig": {
+					"Enabled": true,
+					"DataDir": "/foo"
+				}
+			}`,
+			Error: "PFSEnabled is true, but InstallationID is empty",
 		},
 	}
 
