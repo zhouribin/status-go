@@ -86,14 +86,6 @@ func (s *SQLLitePersistence) Open(path string, key string) error {
 		return err
 	}
 
-	if _, err = db.Exec("PRAGMA key=ON"); err != nil {
-		return err
-	}
-
-	if _, err = db.Exec("PRAGMA cypher_page_size=4096"); err != nil {
-		return err
-	}
-
 	s.db = db
 
 	return s.setup()
