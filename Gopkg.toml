@@ -155,7 +155,7 @@ ignored = [ "github.com/ethereum/go-ethereum/ethapi" ]
 [[override]]
   name = "github.com/deckarep/golang-set"
   revision = "504e848d77ea4752b3057b8fb46da0e7f746ccf3"
-  
+
 [[constraint]]
   name = "github.com/status-im/doubleratchet"
   revision = "321788dbb6eac36f7dab04e631db139e13bb280b"
