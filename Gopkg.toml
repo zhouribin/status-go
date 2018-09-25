@@ -163,3 +163,7 @@ ignored = [ "github.com/ethereum/go-ethereum/ethapi" ]
 [[constraint]]
   name = "github.com/status-im/migrate"
   branch = "master"
+
+[[constraint]]
+  name = "github.com/juju/ratelimit"
+  version = "1.0.1"

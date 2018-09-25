@@ -18,6 +18,9 @@ const (
 	// DeduplicatorCache is used for the db entries used for messages
 	// deduplication cache
 	DeduplicatorCache
+
+	RateLimitCapacity
+	RateLimitConfig
 )
 
 // Key creates a DB key for a specified service with specified data
