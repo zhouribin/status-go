@@ -102,18 +102,3 @@ index c41d1dc15..04c6f7147 100644
  
  	// Maximum amount of time allowed for writing a complete message.
  	frameWriteTimeout = 20 * time.Second
-diff --git c/whisper/whisperv6/peer.go w/whisper/whisperv6/peer.go
-index 427127290..c30e92d1c 100644
---- c/whisper/whisperv6/peer.go
-+++ w/whisper/whisperv6/peer.go
-@@ -187,6 +187,10 @@ func (peer *Peer) expire() {
- // broadcast iterates over the collection of envelopes and transmits yet unknown
- // ones over the network.
- func (peer *Peer) broadcast() error {
-+	if peer.peer.IsFlaky() {
-+		log.Trace("Waiting for a peer to restore communication", "ID", peer.peer.ID())
-+		return nil
-+	}
- 	envelopes := peer.host.Envelopes()
- 	bundle := make([]*Envelope, 0, len(envelopes))
- 	for _, envelope := range envelopes {
