@@ -776,10 +776,12 @@ func (whisper *Whisper) HandlePeer(peer *p2p.Peer, rw p2p.MsgReadWriter) error {
 	whisperPeer.start()
 	defer whisperPeer.stop()
 	if whisper.ratelimiter != nil {
-		whisper.ratelimiter.I().Create(whisperPeer.peer)
-		defer whisper.ratelimiter.I().Remove(whisperPeer.peer)
+		if err := whisper.ratelimiter.I().Create(whisperPeer.peer); err != nil {
+			return err
+		}
+		defer whisper.ratelimiter.I().Remove(whisperPeer.peer, 0)
 		whisper.ratelimiter.E().Create(whisperPeer.peer)
-		defer whisper.ratelimiter.E().Remove(whisperPeer.peer)
+		defer whisper.ratelimiter.E().Remove(whisperPeer.peer, 0)
 	}
 	return whisper.runMessageLoop(whisperPeer, rw)
 }
@@ -954,6 +956,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 
 		if packet.Code != p2pMessageCode && whisper.ratelimiter != nil {
 			if whisper.ratelimiter.I().TakeAvailable(p.peer, int64(packet.Size)) < int64(packet.Size) {
+				whisper.ratelimiter.I().Remove(p.peer, 10*time.Minute)
 				return fmt.Errorf("peer %v reached traffic limit capacity", p.peer.ID())
 			}
 		}

@@ -21,6 +21,7 @@ const (
 
 	RateLimitCapacity
 	RateLimitConfig
+	RateLimitBlacklist
 )
 
 // Key creates a DB key for a specified service with specified data

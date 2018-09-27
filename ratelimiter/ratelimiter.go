@@ -46,6 +46,16 @@ type PersistedRateLimiter struct {
 	initialized map[string]*ratelimit.Bucket
 }
 
+func (r *PersistedRateLimiter) blacklist(id []byte, duration time.Duration) error {
+	fkey := db.Key(db.RateLimitBlacklist, r.prefix, id)
+	buf := [8]byte{}
+	binary.BigEndian.PutUint64(buf[:], uint64(time.Now().Add(duration).Unix()))
+	if err := r.db.Put(fkey, buf[:], nil); err != nil {
+		return fmt.Errorf("error blacklisting %x: %v", id, err)
+	}
+	return nil
+}
+
 func (r *PersistedRateLimiter) Config() Config {
 	return r.defaultConfig
 }
@@ -64,8 +74,17 @@ func (r *PersistedRateLimiter) getOrCreate(id []byte, config Config) (bucket *ra
 }
 
 func (r *PersistedRateLimiter) Create(id []byte) error {
-	fkey := db.Key(db.RateLimitConfig, r.prefix, id)
+	fkey := db.Key(db.RateLimitBlacklist, r.prefix, id)
 	val, err := r.db.Get(fkey, nil)
+	if err != leveldb.ErrNotFound {
+		deadline := binary.BigEndian.Uint64(val)
+		if deadline >= uint64(time.Now().Unix()) {
+			return fmt.Errorf("identity %x is blacklisted", id)
+		}
+		r.db.Delete(fkey, nil)
+	}
+	fkey = db.Key(db.RateLimitConfig, r.prefix, id)
+	val, err = r.db.Get(fkey, nil)
 	var cfg Config
 	if err == leveldb.ErrNotFound {
 		cfg = r.defaultConfig
@@ -92,7 +111,12 @@ func (r *PersistedRateLimiter) Create(id []byte) error {
 }
 
 // Remove removes key from memory but ensures that the latest information is persisted.
-func (r *PersistedRateLimiter) Remove(id []byte) error {
+func (r *PersistedRateLimiter) Remove(id []byte, duration time.Duration) error {
+	if duration != 0 {
+		if err := r.blacklist(id, duration); err != nil {
+			return err
+		}
+	}
 	r.mu.Lock()
 	bucket, exist := r.initialized[string(id)]
 	delete(r.initialized, string(id))

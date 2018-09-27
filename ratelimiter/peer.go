@@ -3,6 +3,7 @@ package ratelimiter
 import (
 	"net"
 	"strings"
+	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/syndtr/goleveldb/leveldb"
@@ -51,8 +52,8 @@ func (r P2PPeerRateLimiter) Create(peer *p2p.Peer) error {
 	return r.ratelimiter.Create(r.modeFunc(peer))
 }
 
-func (r P2PPeerRateLimiter) Remove(peer *p2p.Peer) error {
-	return r.ratelimiter.Remove(r.modeFunc(peer))
+func (r P2PPeerRateLimiter) Remove(peer *p2p.Peer, duration time.Duration) error {
+	return r.ratelimiter.Remove(r.modeFunc(peer), duration)
 }
 
 func (r P2PPeerRateLimiter) TakeAvailable(peer *p2p.Peer, count int64) int64 {
@@ -68,8 +69,7 @@ func (r P2PPeerRateLimiter) UpdateConfig(peer *p2p.Peer, config Config) error {
 }
 
 type Whisper struct {
-	ingress P2PPeerRateLimiter
-	egress  P2PPeerRateLimiter
+	ingress, egress P2PPeerRateLimiter
 }
 
 func ForWhisper(mode int, db *leveldb.DB, ingress, egress Config) Whisper {
