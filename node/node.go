@@ -22,6 +22,7 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/nat"
 	"github.com/status-im/status-go/mailserver"
 	"github.com/status-im/status-go/params"
+	"github.com/status-im/status-go/ratelimiter"
 	"github.com/status-im/status-go/services/peer"
 	"github.com/status-im/status-go/services/personal"
 	"github.com/status-im/status-go/services/shhext"
@@ -274,6 +275,13 @@ func activateShhService(stack *node.Node, config *params.NodeConfig, db *leveldb
 		}
 
 		whisperService := whisper.New(whisperServiceConfig)
+
+		if config.WhisperConfig.IngressConfig != nil && config.WhisperConfig.EgressConfig != nil {
+			whisperService.UseRatelimiter(
+				ratelimiter.ForWhisper(
+					ratelimiter.IDMode, db,
+					config.WhisperConfig.IngressConfig, config.WhisperConfig.IngressConfig))
+		}
 
 		if config.WhisperConfig.EnableNTPSync {
 			timesource, err := whisperTimeSource(ctx)
