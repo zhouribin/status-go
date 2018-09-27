@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/ethereum/go-ethereum/p2p"
+	"github.com/syndtr/goleveldb/leveldb"
 )
 
 const (
@@ -42,6 +43,10 @@ type P2PPeerRateLimiter struct {
 	ratelimiter Interface
 }
 
+func (r P2PPeerRateLimiter) Config() Config {
+	return r.ratelimiter.Config()
+}
+
 func (r P2PPeerRateLimiter) Create(peer *p2p.Peer) error {
 	return r.ratelimiter.Create(r.modeFunc(peer))
 }
@@ -65,14 +70,12 @@ func (r P2PPeerRateLimiter) UpdateConfig(peer *p2p.Peer, config Config) error {
 type Whisper struct {
 	ingress P2PPeerRateLimiter
 	egress  P2PPeerRateLimiter
-	topic   Interface
 }
 
-func ForWhisper(mode int, ratelimiter Interface) Whisper {
+func ForWhisper(mode int, db *leveldb.DB, ingress, egress Config) Whisper {
 	return Whisper{
-		ingress: NewP2PRateLimiter(mode, withPrefix([]byte("i"), ratelimiter)),
-		egress:  NewP2PRateLimiter(mode, withPrefix([]byte("e"), ratelimiter)),
-		topic:   withPrefix([]byte("t"), ratelimiter),
+		ingress: NewP2PRateLimiter(mode, NewPersisted(db, ingress, []byte("i"))),
+		egress:  NewP2PRateLimiter(mode, NewPersisted(db, egress, []byte("e"))),
 	}
 }
 
@@ -82,8 +85,4 @@ func (w Whisper) I() P2PPeerRateLimiter {
 
 func (w Whisper) E() P2PPeerRateLimiter {
 	return w.egress
-}
-
-func (w Whisper) Topic() Interface {
-	return w.topic
 }

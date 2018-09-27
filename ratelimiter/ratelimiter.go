@@ -14,9 +14,7 @@ import (
 )
 
 type Config struct {
-	Capacity uint32
-	Quantum  uint32
-	Interval uint32
+	Interval, Capacity, Quantum uint64
 }
 
 // compare config with existing ratelimited bucket.
@@ -29,21 +27,27 @@ func newBucket(c Config) *ratelimit.Bucket {
 	return ratelimit.NewBucketWithQuantum(time.Duration(c.Interval), int64(c.Capacity), int64(c.Quantum))
 }
 
-func NewPersisted(db *leveldb.DB, config Config) *PersistedRateLimiter {
+func NewPersisted(db *leveldb.DB, config Config, prefix []byte) *PersistedRateLimiter {
 	return &PersistedRateLimiter{
 		db:            db,
 		defaultConfig: config,
 		initialized:   map[string]*ratelimit.Bucket{},
+		prefix:        prefix,
 	}
 }
 
 // PersistedRateLimiter persists latest capacity and updated config per unique ID.
 type PersistedRateLimiter struct {
 	db            *leveldb.DB
+	prefix        []byte
 	defaultConfig Config
 
 	mu          sync.Mutex
 	initialized map[string]*ratelimit.Bucket
+}
+
+func (r *PersistedRateLimiter) Config() Config {
+	return r.defaultConfig
 }
 
 func (r *PersistedRateLimiter) getOrCreate(id []byte, config Config) (bucket *ratelimit.Bucket) {
@@ -60,7 +64,7 @@ func (r *PersistedRateLimiter) getOrCreate(id []byte, config Config) (bucket *ra
 }
 
 func (r *PersistedRateLimiter) Create(id []byte) error {
-	fkey := db.Key(db.RateLimitConfig, id)
+	fkey := db.Key(db.RateLimitConfig, r.prefix, id)
 	val, err := r.db.Get(fkey, nil)
 	var cfg Config
 	if err == leveldb.ErrNotFound {
@@ -73,15 +77,15 @@ func (r *PersistedRateLimiter) Create(id []byte) error {
 		}
 	}
 	bucket := r.getOrCreate(id, cfg)
-	fkey = db.Key(db.RateLimitCapacity, id)
+	fkey = db.Key(db.RateLimitCapacity, r.prefix, id)
 	val, err = r.db.Get(fkey, nil)
 	if err == leveldb.ErrNotFound {
 		return nil
-	} else if len(val) != 8 {
+	} else if len(val) != 16 {
 		log.Error("stored value is of unexpected length", "expected", 8, "stored", len(val))
 		return nil
 	}
-	bucket.TakeAvailable(int64(binary.BigEndian.Uint32(val[:4])))
+	bucket.TakeAvailable(int64(binary.BigEndian.Uint64(val[:8])))
 	// TODO refill rate limiter due to time difference. e.g. if record was stored at T and C seconds passed since T.
 	// we need to add RATE_PER_SECOND*C to a bucket
 	return nil
@@ -100,10 +104,10 @@ func (r *PersistedRateLimiter) Remove(id []byte) error {
 }
 
 func (r *PersistedRateLimiter) store(id []byte, bucket *ratelimit.Bucket) error {
-	buf := [8]byte{}
-	binary.BigEndian.PutUint32(buf[:], uint32(bucket.Capacity()-bucket.Available()))
-	binary.BigEndian.PutUint32(buf[4:], uint32(time.Now().Unix()))
-	err := r.db.Put(db.Key(db.RateLimitCapacity, id), buf[:], nil)
+	buf := [16]byte{}
+	binary.BigEndian.PutUint64(buf[:], uint64(bucket.Capacity()-bucket.Available()))
+	binary.BigEndian.PutUint64(buf[8:], uint64(time.Now().Unix()))
+	err := r.db.Put(db.Key(db.RateLimitCapacity, r.prefix, id), buf[:], nil)
 	if err != nil {
 		return fmt.Errorf("failed to write current capacicity %d for id %x: %v",
 			bucket.Capacity(), id, err)

@@ -6,4 +6,5 @@ type Interface interface {
 	TakeAvailable(id []byte, count int64) int64
 	Available(id []byte) int64
 	UpdateConfig(id []byte, config Config) error
+	Config() Config
 }
