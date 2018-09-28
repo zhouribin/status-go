@@ -503,6 +503,7 @@ func (b *StatusBackend) ExtractIdentityFromContactCode(contactCode string) (stri
 
 // VerifyGroupMembershipSignatures verifies that the signatures are valid
 func (b *StatusBackend) VerifyGroupMembershipSignatures(signaturePairs [][3]string) error {
+	b.log.Info("SIGNATURE PAIRS", "pairs", signaturePairs)
 	return crypto.VerifySignatures(signaturePairs)
 }
 
