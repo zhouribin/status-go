@@ -10,7 +10,9 @@ import (
 )
 
 const (
+	// IDMode enables rate limiting based on peers public key identity.
 	IDMode = 1 + iota
+	// IPMode enables rate limiting based on peer external ip address.
 	IPMode
 )
 

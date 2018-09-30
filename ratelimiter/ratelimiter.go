@@ -33,6 +33,7 @@ func NewPersisted(db *leveldb.DB, config Config, prefix []byte) *PersistedRateLi
 		defaultConfig: config,
 		initialized:   map[string]*ratelimit.Bucket{},
 		prefix:        prefix,
+		timeFunc:      time.Now,
 	}
 }
 
@@ -44,12 +45,14 @@ type PersistedRateLimiter struct {
 
 	mu          sync.Mutex
 	initialized map[string]*ratelimit.Bucket
+
+	timeFunc func() time.Time
 }
 
 func (r *PersistedRateLimiter) blacklist(id []byte, duration time.Duration) error {
 	fkey := db.Key(db.RateLimitBlacklist, r.prefix, id)
 	buf := [8]byte{}
-	binary.BigEndian.PutUint64(buf[:], uint64(time.Now().Add(duration).Unix()))
+	binary.BigEndian.PutUint64(buf[:], uint64(r.timeFunc().Add(duration).Unix()))
 	if err := r.db.Put(fkey, buf[:], nil); err != nil {
 		return fmt.Errorf("error blacklisting %x: %v", id, err)
 	}
@@ -78,7 +81,7 @@ func (r *PersistedRateLimiter) Create(id []byte) error {
 	val, err := r.db.Get(fkey, nil)
 	if err != leveldb.ErrNotFound {
 		deadline := binary.BigEndian.Uint64(val)
-		if deadline >= uint64(time.Now().Unix()) {
+		if deadline >= uint64(r.timeFunc().Unix()) {
 			return fmt.Errorf("identity %x is blacklisted", id)
 		}
 		r.db.Delete(fkey, nil)
@@ -89,10 +92,12 @@ func (r *PersistedRateLimiter) Create(id []byte) error {
 	if err == leveldb.ErrNotFound {
 		cfg = r.defaultConfig
 	} else if err != nil {
-		return fmt.Errorf("failed to read key %x from database: %v", fkey, err)
+		log.Error("faield to read config from db. using default", "err", err)
+		cfg = r.defaultConfig
 	} else {
 		if err := rlp.DecodeBytes(val, &cfg); err != nil {
-			return fmt.Errorf("failed to decode bytes %x into Config object: %v", val, err)
+			log.Error("failed to decode config. using default", "err", err)
+			cfg = r.defaultConfig
 		}
 	}
 	bucket := r.getOrCreate(id, cfg)
@@ -130,7 +135,7 @@ func (r *PersistedRateLimiter) Remove(id []byte, duration time.Duration) error {
 func (r *PersistedRateLimiter) store(id []byte, bucket *ratelimit.Bucket) error {
 	buf := [16]byte{}
 	binary.BigEndian.PutUint64(buf[:], uint64(bucket.Capacity()-bucket.Available()))
-	binary.BigEndian.PutUint64(buf[8:], uint64(time.Now().Unix()))
+	binary.BigEndian.PutUint64(buf[8:], uint64(r.timeFunc().Unix()))
 	err := r.db.Put(db.Key(db.RateLimitCapacity, r.prefix, id), buf[:], nil)
 	if err != nil {
 		return fmt.Errorf("failed to write current capacicity %d for id %x: %v",
@@ -166,5 +171,12 @@ func (r *PersistedRateLimiter) UpdateConfig(id []byte, config Config) error {
 		taken = old.Capacity() - old.Available()
 	}
 	r.getOrCreate(id, config).TakeAvailable(taken)
+	fkey := db.Key(db.RateLimitConfig, r.prefix, id)
+	data, err := rlp.EncodeToBytes(config)
+	if err != nil {
+		log.Error("failed to update config", "cfg", config, "err", err)
+		return nil
+	}
+	r.db.Put(fkey, data, nil)
 	return nil
 }
