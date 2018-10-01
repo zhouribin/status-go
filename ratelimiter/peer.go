@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/ethereum/go-ethereum/p2p"
-	"github.com/syndtr/goleveldb/leveldb"
 )
 
 const (
@@ -34,57 +33,59 @@ func selectFunc(mode int) func(*p2p.Peer) []byte {
 	return idModeFunc
 }
 
-func NewP2PRateLimiter(mode int, ratelimiter Interface) P2PPeerRateLimiter {
-	return P2PPeerRateLimiter{
+// NewP2PRateLimiter returns an instance of P2PRateLimiter.
+func NewP2PRateLimiter(mode int, ratelimiter Interface) P2PRateLimiter {
+	return P2PRateLimiter{
 		modeFunc:    selectFunc(mode),
 		ratelimiter: ratelimiter,
 	}
 }
 
-type P2PPeerRateLimiter struct {
+// P2PRateLimiter implements rate limiter that accepts p2p.Peer as identifier.
+type P2PRateLimiter struct {
 	modeFunc    func(*p2p.Peer) []byte
 	ratelimiter Interface
 }
 
-func (r P2PPeerRateLimiter) Config() Config {
+func (r P2PRateLimiter) Config() Config {
 	return r.ratelimiter.Config()
 }
 
-func (r P2PPeerRateLimiter) Create(peer *p2p.Peer) error {
+func (r P2PRateLimiter) Create(peer *p2p.Peer) error {
 	return r.ratelimiter.Create(r.modeFunc(peer))
 }
 
-func (r P2PPeerRateLimiter) Remove(peer *p2p.Peer, duration time.Duration) error {
+func (r P2PRateLimiter) Remove(peer *p2p.Peer, duration time.Duration) error {
 	return r.ratelimiter.Remove(r.modeFunc(peer), duration)
 }
 
-func (r P2PPeerRateLimiter) TakeAvailable(peer *p2p.Peer, count int64) int64 {
+func (r P2PRateLimiter) TakeAvailable(peer *p2p.Peer, count int64) int64 {
 	return r.ratelimiter.TakeAvailable(r.modeFunc(peer), count)
 }
 
-func (r P2PPeerRateLimiter) Available(peer *p2p.Peer) int64 {
+func (r P2PRateLimiter) Available(peer *p2p.Peer) int64 {
 	return r.ratelimiter.Available(r.modeFunc(peer))
 }
 
-func (r P2PPeerRateLimiter) UpdateConfig(peer *p2p.Peer, config Config) error {
+func (r P2PRateLimiter) UpdateConfig(peer *p2p.Peer, config Config) error {
 	return r.ratelimiter.UpdateConfig(r.modeFunc(peer), config)
 }
 
 type Whisper struct {
-	ingress, egress P2PPeerRateLimiter
+	ingress, egress P2PRateLimiter
 }
 
-func ForWhisper(mode int, db *leveldb.DB, ingress, egress Config) Whisper {
+func ForWhisper(mode int, db DBInterface, ingress, egress Config) Whisper {
 	return Whisper{
 		ingress: NewP2PRateLimiter(mode, NewPersisted(db, ingress, []byte("i"))),
 		egress:  NewP2PRateLimiter(mode, NewPersisted(db, egress, []byte("e"))),
 	}
 }
 
-func (w Whisper) I() P2PPeerRateLimiter {
+func (w Whisper) I() P2PRateLimiter {
 	return w.ingress
 }
 
-func (w Whisper) E() P2PPeerRateLimiter {
+func (w Whisper) E() P2PRateLimiter {
 	return w.egress
 }

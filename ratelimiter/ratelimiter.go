@@ -11,8 +11,27 @@ import (
 	"github.com/juju/ratelimit"
 	"github.com/status-im/status-go/db"
 	"github.com/syndtr/goleveldb/leveldb"
+	"github.com/syndtr/goleveldb/leveldb/opt"
 )
 
+// Interface describes common interface methods.
+type Interface interface {
+	Create([]byte) error
+	Remove([]byte, time.Duration) error
+	TakeAvailable([]byte, int64) int64
+	Available([]byte) int64
+	UpdateConfig([]byte, Config) error
+	Config() Config
+}
+
+// DBInterface defines leveldb methods used by ratelimiter.
+type DBInterface interface {
+	Put(key, value []byte, wo *opt.WriteOptions) error
+	Get(key []byte, ro *opt.ReadOptions) (value []byte, err error)
+	Delete(key []byte, wo *opt.WriteOptions) error
+}
+
+// Config is a set of options used by rate limiter.
 type Config struct {
 	Interval, Capacity, Quantum uint64
 }
@@ -27,7 +46,7 @@ func newBucket(c Config) *ratelimit.Bucket {
 	return ratelimit.NewBucketWithQuantum(time.Duration(c.Interval), int64(c.Capacity), int64(c.Quantum))
 }
 
-func NewPersisted(db *leveldb.DB, config Config, prefix []byte) *PersistedRateLimiter {
+func NewPersisted(db DBInterface, config Config, prefix []byte) *PersistedRateLimiter {
 	return &PersistedRateLimiter{
 		db:            db,
 		defaultConfig: config,
@@ -39,8 +58,8 @@ func NewPersisted(db *leveldb.DB, config Config, prefix []byte) *PersistedRateLi
 
 // PersistedRateLimiter persists latest capacity and updated config per unique ID.
 type PersistedRateLimiter struct {
-	db            *leveldb.DB
-	prefix        []byte
+	db            DBInterface
+	prefix        []byte // TODO move prefix outside of the rate limiter using database interface
 	defaultConfig Config
 
 	mu          sync.Mutex
