@@ -131,6 +131,7 @@ func (s *EncryptionService) keyFromPassiveX3DH(myIdentityKey *ecdsa.PrivateKey, 
 
 // ProcessPublicBundle persists a bundle
 func (s *EncryptionService) ProcessPublicBundle(myIdentityKey *ecdsa.PrivateKey, b *Bundle) error {
+	s.log.Info("Adding public bundle")
 	// Make sure the bundle belongs to who signed it
 	err := VerifyBundle(b)
 	if err != nil {
@@ -143,6 +144,12 @@ func (s *EncryptionService) ProcessPublicBundle(myIdentityKey *ecdsa.PrivateKey,
 func (s *EncryptionService) DecryptPayload(myIdentityKey *ecdsa.PrivateKey, theirIdentityKey *ecdsa.PublicKey, theirInstallationID string, msgs map[string]*DirectMessageProtocol) ([]byte, error) {
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
+	s.log.Info("STARTED", "installationID", s.installationID)
+	keys := []string{}
+	for k := range msgs {
+		keys = append(keys, k)
+	}
+	s.log.Info("KEYS RECEIVED", "keys", keys)
 
 	msg := msgs[s.installationID]
 	if msg == nil {
@@ -187,6 +194,8 @@ func (s *EncryptionService) DecryptPayload(myIdentityKey *ecdsa.PrivateKey, thei
 			Ciphertext: msg.GetPayload(),
 		}
 
+		s.log.Info("DECRYPTING", "drmessage", drMessage.Header)
+
 		theirIdentityKeyC := ecrypto.CompressPubkey(theirIdentityKey)
 
 		drInfo, err := s.persistence.GetRatchetInfo(drHeader.GetId(), theirIdentityKeyC, theirInstallationID)
@@ -218,6 +227,7 @@ func (s *EncryptionService) DecryptPayload(myIdentityKey *ecdsa.PrivateKey, thei
 		return s.DecryptWithDH(myIdentityKey, decompressedKey, payload)
 	}
 
+	s.log.Info("FINISHED")
 	return nil, errors.New("no key specified")
 }
 
@@ -291,6 +301,8 @@ func (s *EncryptionService) encryptUsingDR(theirIdentityKey *ecdsa.PublicKey, dr
 		N:   response.Header.N,
 		Pn:  response.Header.PN,
 	}
+
+	s.log.Info("ENCRYPTIN", "drmessage", response.Header)
 
 	return response.Ciphertext, header, nil
 }
@@ -388,6 +400,7 @@ func (s *EncryptionService) EncryptPayload(theirIdentityKey *ecdsa.PublicKey, my
 	response := make(map[string]*DirectMessageProtocol)
 
 	for installationID, signedPreKeyContainer := range theirBundle.GetSignedPreKeys() {
+		s.log.Info("SENDING TO", "intallationID", installationID)
 		if s.installationID == installationID {
 			continue
 		}
@@ -400,6 +413,7 @@ func (s *EncryptionService) EncryptPayload(theirIdentityKey *ecdsa.PublicKey, my
 		}
 
 		if drInfo != nil {
+			s.log.Info("USING DR")
 			encryptedPayload, drHeader, err := s.encryptUsingDR(theirIdentityKey, drInfo, payload)
 			if err != nil {
 				return nil, err
@@ -430,6 +444,7 @@ func (s *EncryptionService) EncryptPayload(theirIdentityKey *ecdsa.PublicKey, my
 		}
 
 		if theirBundle != nil {
+			s.log.Info("USING X3DH")
 			sharedKey, ourEphemeralKey, err := s.keyFromActiveX3DH(theirIdentityKeyC, theirSignedPreKey, myIdentityKey)
 			if err != nil {
 				return nil, err

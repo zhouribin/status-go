@@ -7,6 +7,7 @@ import (
 
 	"github.com/ethereum/go-ethereum/crypto"
 
+	"github.com/ethereum/go-ethereum/log"
 	_ "github.com/mutecomm/go-sqlcipher" // We require go sqlcipher that overrides default implementation
 	dr "github.com/status-im/doubleratchet"
 	"github.com/status-im/migrate"
@@ -86,14 +87,6 @@ func (s *SQLLitePersistence) Open(path string, key string) error {
 		return err
 	}
 
-	if _, err = db.Exec("PRAGMA key=ON"); err != nil {
-		return err
-	}
-
-	if _, err = db.Exec("PRAGMA cypher_page_size=4096"); err != nil {
-		return err
-	}
-
 	s.db = db
 
 	return s.setup()
@@ -148,6 +141,8 @@ func (s *SQLLitePersistence) AddPublicBundle(b *Bundle) error {
 		if err != nil {
 			return err
 		}
+		log.New("package", "status-go/services/sshext.chat").Info("ADDING PUBLIC BUNDLE", "installation", installationID)
+
 		defer insertStmt.Close()
 		_, err = insertStmt.Exec(
 			b.GetIdentity(),
@@ -226,6 +221,8 @@ func (s *SQLLitePersistence) GetAnyPrivateBundle(myIdentityKey []byte) (*BundleC
 		}
 		// If there is a private key, we set the timestamp of the bundle container
 		if privateKey != nil {
+
+			log.New("package", "status-go/services/sshext.chat").Info("PRIVATE KEY FUOND", "private", privateKey)
 			bundleContainer.Timestamp = timestamp
 		}
 
@@ -233,6 +230,7 @@ func (s *SQLLitePersistence) GetAnyPrivateBundle(myIdentityKey []byte) (*BundleC
 		bundle.Identity = identity
 	}
 
+	log.New("package", "status-go/services/sshext.chat").Info("PRIVATE KEY TIMESTAMP", "timestamp", bundleContainer.Timestamp)
 	// If no records are found or no record with private key, return nil
 	if rowCount == 0 || bundleContainer.Timestamp == 0 {
 		return nil, nil

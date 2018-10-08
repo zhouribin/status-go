@@ -280,6 +280,42 @@ func (api *PublicAPI) SendDirectMessage(ctx context.Context, msg chat.SendDirect
 	return response, nil
 }
 
+// SendPairingMessage sends a 1:1 chat message to our own devices to initiate a pairing session
+func (api *PublicAPI) SendPairingMessage(ctx context.Context, msg chat.SendDirectMessageRPC) ([]hexutil.Bytes, error) {
+	if !api.service.pfsEnabled {
+		return nil, ErrPFSNotEnabled
+	}
+	// To be completely agnostic from whisper we should not be using whisper to store the key
+	privateKey, err := api.service.w.GetPrivateKey(msg.Sig)
+	if err != nil {
+		return nil, err
+	}
+
+	msg.PubKey = crypto.FromECDSAPub(&privateKey.PublicKey)
+	if err != nil {
+		return nil, err
+	}
+
+	protocolMessage, err := api.service.protocol.BuildPairingMessage(privateKey, msg.Payload)
+	if err != nil {
+		return nil, err
+	}
+
+	var response []hexutil.Bytes
+
+	// Enrich with transport layer info
+	whisperMessage := chat.DirectMessageToWhisper(&msg, protocolMessage)
+
+	// And dispatch
+	hash, err := api.Post(ctx, *whisperMessage)
+	if err != nil {
+		return nil, err
+	}
+	response = append(response, hash)
+
+	return response, nil
+}
+
 // SendGroupMessage sends a group messag chat message to the underlying transport
 func (api *PublicAPI) SendGroupMessage(ctx context.Context, msg chat.SendGroupMessageRPC) ([]hexutil.Bytes, error) {
 	if !api.service.pfsEnabled {

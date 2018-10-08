@@ -46,7 +46,8 @@ func (p *ProtocolService) addBundleAndMarshal(myIdentityKey *ecdsa.PrivateKey, m
 func (p *ProtocolService) BuildPublicMessage(myIdentityKey *ecdsa.PrivateKey, payload []byte) ([]byte, error) {
 	// Build message not encrypted
 	protocolMessage := &ProtocolMessage{
-		PublicMessage: payload,
+		InstallationId: p.encryption.installationID,
+		PublicMessage:  payload,
 	}
 
 	return p.addBundleAndMarshal(myIdentityKey, protocolMessage)
@@ -79,6 +80,24 @@ func (p *ProtocolService) BuildDirectMessage(myIdentityKey *ecdsa.PrivateKey, th
 		}
 	}
 	return response, nil
+}
+
+// BuildPairingMessage sends a message to our own devices using DH so that it can be decrypted by any other device
+func (p *ProtocolService) BuildPairingMessage(myIdentityKey *ecdsa.PrivateKey, payload []byte) ([]byte, error) {
+	// Encrypt payload
+	encryptionResponse, err := p.encryption.EncryptPayloadWithDH(&myIdentityKey.PublicKey, payload)
+	if err != nil {
+		p.log.Error("encryption-service", "error encrypting payload", err)
+		return nil, err
+	}
+
+	// Build message
+	protocolMessage := &ProtocolMessage{
+		InstallationId: p.encryption.installationID,
+		DirectMessage:  encryptionResponse,
+	}
+
+	return p.addBundleAndMarshal(myIdentityKey, protocolMessage)
 }
 
 // ProcessPublicBundle processes a received X3DH bundle

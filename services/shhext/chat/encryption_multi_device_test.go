@@ -1,6 +1,7 @@
 package chat
 
 import (
+	"fmt"
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/stretchr/testify/suite"
 	"os"
@@ -104,6 +105,7 @@ func (s *EncryptionServiceMultiDeviceSuite) TestProcessPublicBundleOutOfOrder() 
 	alice1MergedBundle1, err := s.alice2.CreateBundle(aliceKey)
 	s.Require().NoError(err)
 
+	fmt.Println(alice1MergedBundle1)
 	s.Require().NotNil(alice1MergedBundle1.GetSignedPreKeys()["alice1"])
 	s.Require().NotNil(alice1MergedBundle1.GetSignedPreKeys()["alice2"])
 }
