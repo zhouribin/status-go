@@ -83,3 +83,27 @@ func (s *EncryptionServiceMultiDeviceSuite) TestProcessPublicBundle() {
 	s.Require().NotNil(alice1MergedBundle1.GetSignedPreKeys()["alice1"])
 	s.Require().NotNil(alice1MergedBundle1.GetSignedPreKeys()["alice2"])
 }
+
+func (s *EncryptionServiceMultiDeviceSuite) TestProcessPublicBundleOutOfOrder() {
+	aliceKey, err := crypto.GenerateKey()
+	s.Require().NoError(err)
+
+	// Alice1 creates a bundle
+	alice1Bundle, err := s.alice1.CreateBundle(aliceKey)
+	s.Require().NoError(err)
+
+	// Alice2 Receives the bundle
+	err = s.alice2.ProcessPublicBundle(aliceKey, alice1Bundle)
+	s.Require().NoError(err)
+
+	// Alice2 Creates a Bundle
+	_, err = s.alice2.CreateBundle(aliceKey)
+	s.Require().NoError(err)
+
+	// It should contain both bundles
+	alice1MergedBundle1, err := s.alice2.CreateBundle(aliceKey)
+	s.Require().NoError(err)
+
+	s.Require().NotNil(alice1MergedBundle1.GetSignedPreKeys()["alice1"])
+	s.Require().NotNil(alice1MergedBundle1.GetSignedPreKeys()["alice2"])
+}

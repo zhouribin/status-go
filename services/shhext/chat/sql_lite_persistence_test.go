@@ -154,9 +154,10 @@ func (s *SQLLitePersistenceTestSuite) TestRatchetInfoPrivateBundle() {
 	)
 	s.Require().NoError(err)
 
-	ratchetInfo, err := s.service.GetRatchetInfo(bundle.GetBundle().GetSignedPreKeys()["2"].GetSignedPreKey(), []byte("their-public-key"))
+	ratchetInfo, err := s.service.GetRatchetInfo(bundle.GetBundle().GetSignedPreKeys()["2"].GetSignedPreKey(), []byte("their-public-key"), "1")
 
 	s.Require().NoError(err)
+	s.Require().NotNil(ratchetInfo)
 	s.NotNil(ratchetInfo.ID, "It adds an id")
 	s.Equal(ratchetInfo.PrivateKey, bundle.GetPrivateSignedPreKey(), "It returns the private key")
 	s.Equal(ratchetInfo.Sk, []byte("symmetric-key"), "It returns the symmetric key")
@@ -191,7 +192,7 @@ func (s *SQLLitePersistenceTestSuite) TestRatchetInfoPublicBundle() {
 	)
 	s.Require().NoError(err)
 
-	ratchetInfo, err := s.service.GetRatchetInfo(signedPreKey, theirPublicKey)
+	ratchetInfo, err := s.service.GetRatchetInfo(signedPreKey, theirPublicKey, installationID)
 
 	s.Require().NoError(err)
 	s.Require().NotNil(ratchetInfo, "It returns the ratchet info")
@@ -227,7 +228,7 @@ func (s *SQLLitePersistenceTestSuite) TestRatchetInfoNoBundle() {
 
 	s.Error(err, "It returns an error")
 
-	_, err = s.service.GetRatchetInfo([]byte("non-existing-bundle"), []byte("their-public-key"))
+	_, err = s.service.GetRatchetInfo([]byte("non-existing-bundle"), []byte("their-public-key"), "none")
 	s.Require().NoError(err)
 
 	ratchetInfo, err := s.service.GetAnyRatchetInfo([]byte("their-public-key"), "4")

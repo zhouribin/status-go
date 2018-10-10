@@ -65,7 +65,8 @@ func (p *ProtocolService) BuildDirectMessage(myIdentityKey *ecdsa.PrivateKey, th
 
 		// Build message
 		protocolMessage := &ProtocolMessage{
-			DirectMessage: encryptionResponse,
+			InstallationId: p.encryption.installationID,
+			DirectMessage:  encryptionResponse,
 		}
 
 		payload, err := p.addBundleAndMarshal(myIdentityKey, protocolMessage)
@@ -120,7 +121,7 @@ func (p *ProtocolService) HandleMessage(myIdentityKey *ecdsa.PrivateKey, theirPu
 
 	// Decrypt message
 	if directMessage := protocolMessage.GetDirectMessage(); directMessage != nil {
-		return p.encryption.DecryptPayload(myIdentityKey, theirPublicKey, directMessage)
+		return p.encryption.DecryptPayload(myIdentityKey, theirPublicKey, protocolMessage.GetInstallationId(), directMessage)
 	}
 
 	// Return error
