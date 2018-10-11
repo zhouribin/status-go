@@ -134,6 +134,42 @@ func (s *SQLLitePersistenceTestSuite) TestMultiplePublicBundle() {
 
 }
 
+func (s *SQLLitePersistenceTestSuite) TestMultiDevicePublicBundle() {
+	key, err := crypto.GenerateKey()
+	s.Require().NoError(err)
+
+	actualBundle, err := s.service.GetPublicBundle(&key.PublicKey)
+	s.Require().NoError(err, "It does not return an error if the bundle is not there")
+	s.Nil(actualBundle)
+
+	bundleContainer, err := NewBundleContainer(key, "1")
+	s.Require().NoError(err)
+
+	bundle := bundleContainer.GetBundle()
+	err = s.service.AddPublicBundle(bundle)
+	s.Require().NoError(err)
+
+	// Adding it again does not throw an error
+	err = s.service.AddPublicBundle(bundle)
+	s.Require().NoError(err)
+
+	// Adding a different bundle from a different instlation id
+	bundleContainer, err = NewBundleContainer(key, "2")
+	s.Require().NoError(err)
+
+	bundle = bundleContainer.GetBundle()
+	err = s.service.AddPublicBundle(bundle)
+	s.Require().NoError(err)
+
+	// Returns the most recent bundle
+	actualBundle, err = s.service.GetPublicBundle(&key.PublicKey)
+	s.Require().NoError(err)
+
+	s.Equal(bundle.GetIdentity(), actualBundle.GetIdentity(), "It sets the identity")
+	s.NotNil(actualBundle.GetSignedPreKeys()["1"])
+	s.NotNil(actualBundle.GetSignedPreKeys()["2"])
+}
+
 func (s *SQLLitePersistenceTestSuite) TestRatchetInfoPrivateBundle() {
 	key, err := crypto.GenerateKey()
 	s.Require().NoError(err)

@@ -47,5 +47,5 @@ type PersistenceService interface {
 	GetAnyRatchetInfo([]byte, string) (*RatchetInfo, error)
 	// RatchetInfoConfirmed clears the ephemeral key in the RatchetInfo
 	// associated with the specified bundle ID and interlocutor identity public key
-	RatchetInfoConfirmed([]byte, []byte) error
+	RatchetInfoConfirmed([]byte, []byte, string) error
 }
