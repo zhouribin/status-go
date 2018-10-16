@@ -85,12 +85,13 @@ func (api *PublicAPI) NewFilter(crit filters.FilterCriteria) (rpc.ID, error) {
 	id := rpc.ID(uuid.New())
 	ctx, cancel := context.WithCancel(context.Background())
 	f := &logsFilter{
-		id:     id,
-		crit:   ethereum.FilterQuery(crit),
-		done:   make(chan struct{}),
-		timer:  time.NewTimer(api.filterLivenessPeriod),
-		ctx:    ctx,
-		cancel: cancel,
+		id:        id,
+		crit:      ethereum.FilterQuery(crit),
+		done:      make(chan struct{}),
+		timer:     time.NewTimer(api.filterLivenessPeriod),
+		ctx:       ctx,
+		cancel:    cancel,
+		logsCache: newCache(cacheSize),
 	}
 	api.filtersMu.Lock()
 	api.filters[id] = f

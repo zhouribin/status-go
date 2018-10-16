@@ -18,16 +18,13 @@ type ContextCaller interface {
 }
 
 func pollLogs(client ContextCaller, f *logsFilter, timeout, period time.Duration) {
-	adjusted := false
 	query := func() {
 		ctx, cancel := context.WithTimeout(f.ctx, timeout)
-		logs, err := getLogs(ctx, client, f.crit)
-		cancel()
+		defer cancel()
+		logs, err := getLogs(ctx, client, f.criteria())
 		if err != nil {
-			log.Error("failed to get logs", "criteria", f.crit, "error", err)
-		} else if !adjusted {
-			adjustFromBlock(&f.crit)
-			adjusted = true
+			log.Error("error fetch logs", "criteria", f.crit, "error", err)
+			return
 		}
 		if err := f.add(logs); err != nil {
 			log.Error("error adding logs", "logs", logs, "error", err)
@@ -46,21 +43,6 @@ func pollLogs(client ContextCaller, f *logsFilter, timeout, period time.Duration
 		}
 	}
 }
-
-// adjustFromBlock adjusts crit.FromBlock to the latest to avoid querying same logs multiple times.
-func adjustFromBlock(crit *ethereum.FilterQuery) {
-	latest := big.NewInt(rpc.LatestBlockNumber.Int64())
-	// don't adjust if filter is not interested in newer blocks
-	if crit.ToBlock != nil && crit.ToBlock.Cmp(latest) == 1 {
-		return
-	}
-	// don't adjust if from block is already pending
-	if crit.FromBlock != nil && crit.FromBlock.Cmp(latest) == -1 {
-		return
-	}
-	crit.FromBlock = latest
-}
-
 func getLogs(ctx context.Context, client ContextCaller, crit ethereum.FilterQuery) (rst []types.Log, err error) {
 	return rst, client.CallContext(ctx, &rst, "eth_getLogs", toFilterArg(crit))
 }
