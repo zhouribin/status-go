@@ -10,7 +10,7 @@ import (
 )
 
 const (
-	cacheSize = 20
+	defaultCacheSize = 20
 )
 
 type cacheRecord struct {
@@ -28,11 +28,13 @@ func newCache(size int) *cache {
 
 type cache struct {
 	mu      sync.RWMutex
-	last    int
-	size    int
+	last    int // index of the last record
+	size    int // length of the records
 	records []cacheRecord
 }
 
+// add inserts logs into cache and returns added and replaced logs.
+// replaced logs with will be returned with Removed=true.
 func (c *cache) add(logs []types.Log) (added, replaced []types.Log, err error) {
 	if len(logs) == 0 {
 		return nil, nil, nil
@@ -41,15 +43,8 @@ func (c *cache) add(logs []types.Log) (added, replaced []types.Log, err error) {
 	if len(aggregated) == 0 {
 		return nil, nil, nil
 	}
-	for prev, i := 0, 1; i < len(aggregated); i++ {
-		if aggregated[prev].block == aggregated[i].block-1 {
-			prev = i
-		} else {
-			return nil, nil, fmt.Errorf(
-				"logs must be delivered straight in order. gaps between blocks '%d' and '%d'",
-				aggregated[prev].block, aggregated[i].block,
-			)
-		}
+	if err := checkLogsAreInOrder(aggregated); err != nil {
+		return nil, nil, err
 	}
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -63,39 +58,62 @@ func (c *cache) add(logs []types.Log) (added, replaced []types.Log, err error) {
 }
 
 func (c *cache) earliestBlockNum() uint64 {
-	if len(c.records) < 0 {
+	if len(c.records) == 0 {
 		return 0
 	}
 	return c.records[0].block
 }
 
-// merge merges old and new cache records, returns added and replaced logs.
-func merge(position int, old, new []cacheRecord) ([]cacheRecord, int, []types.Log, []types.Log) {
+func checkLogsAreInOrder(records []cacheRecord) error {
+	for prev, i := 0, 1; i < len(records); i++ {
+		if records[prev].block == records[i].block-1 {
+			prev = i
+		} else {
+			return fmt.Errorf(
+				"logs must be delivered straight in order. gaps between blocks '%d' and '%d'",
+				records[prev].block, records[i].block,
+			)
+		}
+	}
+	return nil
+}
+
+// merge merges received records into old slice starting at provided position, example:
+// [1, 2, 3, 0, 0] and position 1
+//    [2, 3, 4]
+// [1, 2, 3, 4, 0]
+// if limit of the old slice is reached records will be popped in the fifo order, e.g:
+// [1, 2, 3, 4, 0] starting at position 3
+//          [4, 5, 6]
+// [2, 3, 4, 5, 6]
+// if hash doesn't match previously received hash - such block was removed due to reorg
+// logs that were a part of that block will be returned with Removed set to true
+func merge(position int, old, received []cacheRecord) ([]cacheRecord, int, []types.Log, []types.Log) {
 	var (
 		added, replaced []types.Log
 		limit           = len(old) - 1
 		next            = position
 		last            = position
 	)
-	for i := range new {
-		record := new[i]
-		// clear space for the new record
+	for i := range received {
+		record := received[i]
 		if last == limit && record.block > old[last].block {
-			copy(old[:], old[1:])
+			// clear space for the new record
+			copy(old, old[1:])
 			old[last] = record
 			added = append(added, record.logs...)
-			// if record already in the cache just move forward
 		} else if old[next].hash == record.hash {
+			// if record already in the cache just move forward
 			last = next
 			next++
-			// no record at the given last
 		} else if (old[next].hash == common.Hash{}) {
+			// nothing to replace.
 			old[next] = record
 			added = append(added, record.logs...)
 			last = next
 			next++
-			// record hash is not equal to previous record hash at the same height. reorg
 		} else if record.hash != old[next].hash {
+			// record hash is not equal to previous record hash at the same height. reorg
 			replaced = append(replaced, old[next].logs...)
 			added = append(added, record.logs...)
 			old[next] = record

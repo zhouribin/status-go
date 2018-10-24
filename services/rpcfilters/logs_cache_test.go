@@ -41,17 +41,21 @@ func TestAggregateLessThenFull(t *testing.T) {
 }
 
 func TestMerge(t *testing.T) {
-	step1Logs := []types.Log{}
-	for i := 1; i <= 3; i++ {
-		step1Logs = append(step1Logs, types.Log{BlockNumber: uint64(i), BlockHash: common.Hash{byte(i)}})
+	step1Logs := []types.Log{
+		{BlockNumber: 1, BlockHash: common.Hash{1}},
+		{BlockNumber: 2, BlockHash: common.Hash{2}},
+		{BlockNumber: 3, BlockHash: common.Hash{3}},
 	}
-	step2Logs := []types.Log{}
-	for i := 2; i <= 4; i++ {
-		step2Logs = append(step2Logs, types.Log{BlockNumber: uint64(i), BlockHash: common.Hash{byte(i)}})
+	step2Logs := []types.Log{
+		{BlockNumber: 2, BlockHash: common.Hash{2}},
+		{BlockNumber: 3, BlockHash: common.Hash{3}},
+		{BlockNumber: 4, BlockHash: common.Hash{4}},
 	}
-	reorg := []types.Log{}
-	for i := 2; i <= 5; i++ {
-		reorg = append(reorg, types.Log{BlockNumber: uint64(i), BlockHash: common.Hash{byte(i), byte(i)}})
+	reorg := []types.Log{
+		{BlockNumber: 2, BlockHash: common.Hash{2, 2}},
+		{BlockNumber: 3, BlockHash: common.Hash{3, 3}},
+		{BlockNumber: 4, BlockHash: common.Hash{4, 4}},
+		{BlockNumber: 5, BlockHash: common.Hash{5, 4}},
 	}
 
 	limit := 7
@@ -62,12 +66,12 @@ func TestMerge(t *testing.T) {
 	require.Empty(t, replaced)
 	require.Equal(t, 2, position)
 	require.Equal(t, 3, int(cache[2].block))
-	cache, position, added, replaced = merge(1, cache, aggregateLogs(step2Logs, limit))
+	_, position, added, replaced = merge(1, cache, aggregateLogs(step2Logs, limit))
 	require.Len(t, added, 1)
 	require.Empty(t, replaced)
 	require.Equal(t, 3, position)
 	require.Equal(t, 4, int(cache[3].block))
-	cache, position, added, replaced = merge(1, cache, aggregateLogs(reorg, limit))
+	_, position, added, replaced = merge(1, cache, aggregateLogs(reorg, limit))
 	require.Len(t, added, 4)
 	require.Len(t, replaced, 3)
 	require.Equal(t, 4, position)

@@ -33,12 +33,8 @@ func TestFilterLogs(t *testing.T) {
 	}
 
 	type testCase struct {
-		description string
-
-		blockNum  uint64
-		blockHash common.Hash
-		crit      ethereum.FilterQuery
-
+		description  string
+		crit         ethereum.FilterQuery
 		expectedLogs []types.Log
 	}
 
@@ -74,7 +70,7 @@ func TestFilterLogs(t *testing.T) {
 		},
 		{
 			description:  "LimitedBySecondTopic",
-			crit:         ethereum.FilterQuery{Topics: [][]common.Hash{[]common.Hash{}, logs[1].Topics}},
+			crit:         ethereum.FilterQuery{Topics: [][]common.Hash{{}, logs[1].Topics}},
 			expectedLogs: []types.Log{logs[1]},
 		},
 	} {

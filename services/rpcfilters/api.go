@@ -91,7 +91,7 @@ func (api *PublicAPI) NewFilter(crit filters.FilterCriteria) (rpc.ID, error) {
 		timer:     time.NewTimer(api.filterLivenessPeriod),
 		ctx:       ctx,
 		cancel:    cancel,
-		logsCache: newCache(cacheSize),
+		logsCache: newCache(defaultCacheSize),
 	}
 	api.filtersMu.Lock()
 	api.filters[id] = f

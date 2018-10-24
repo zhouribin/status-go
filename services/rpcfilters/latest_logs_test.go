@@ -84,7 +84,7 @@ func TestLogsFetcherAdjusted(t *testing.T) {
 			FromBlock: big.NewInt(10),
 		},
 		done:      make(chan struct{}),
-		logsCache: newCache(cacheSize),
+		logsCache: newCache(defaultCacheSize),
 	}
 	logs := []types.Log{
 		{BlockNumber: 11}, {BlockNumber: 12},
@@ -101,7 +101,7 @@ func TestAdjustedDueToReorg(t *testing.T) {
 			FromBlock: big.NewInt(10),
 		},
 		done:      make(chan struct{}),
-		logsCache: newCache(cacheSize),
+		logsCache: newCache(defaultCacheSize),
 	}
 	logs := []types.Log{
 		{BlockNumber: 11, BlockHash: common.Hash{1}}, {BlockNumber: 12, BlockHash: common.Hash{2}},
@@ -123,7 +123,7 @@ func TestLogsFetcherCanceledContext(t *testing.T) {
 			FromBlock: big.NewInt(10),
 		},
 		done:      make(chan struct{}),
-		logsCache: newCache(cacheSize),
+		logsCache: newCache(defaultCacheSize),
 	}
 	cancel()
 	c := runLogsFetcherTest(t, f, [][]types.Log{make([]types.Log, 2)}, 2)
