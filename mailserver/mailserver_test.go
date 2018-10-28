@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/status-im/status-go/params"
-	"github.com/status-im/status-go/services/shhext"
 	whisper "github.com/status-im/whisper/whisperv6"
 	"github.com/stretchr/testify/suite"
 )
@@ -328,7 +327,7 @@ func (s *MailserverSuite) TestRequestPaginationLimit() {
 	s.Nil(cursor)
 	s.Equal(params.limit, limit)
 
-	envelopes, _, cursor, err := s.server.processRequest(nil, lower, upper, bloom, limit, nil, false)
+	envelopes, _, cursor, err := s.server.processRequest(nil, lower, upper, bloom, limit, nil)
 	s.NoError(err)
 	for _, env := range envelopes {
 		receivedHashes = append(receivedHashes, env.Hash())
@@ -340,12 +339,12 @@ func (s *MailserverSuite) TestRequestPaginationLimit() {
 	s.Equal(limit, uint32(len(receivedHashes)))
 	// the 6 envelopes received should be in descending order
 	s.Equal(reverseSentHashes[:limit], receivedHashes)
-	// cursor should be the key of the last envelope of the last page
+	// cursor should be the key of the first envelope of the next page
 	s.Equal(archiveKeys[count-limit], fmt.Sprintf("%x", cursor))
 
 	// second page
 	receivedHashes = []common.Hash{}
-	envelopes, _, cursor, err = s.server.processRequest(nil, lower, upper, bloom, limit, cursor, false)
+	envelopes, _, cursor, err = s.server.processRequest(nil, lower, upper, bloom, limit, cursor)
 	s.NoError(err)
 	for _, env := range envelopes {
 		receivedHashes = append(receivedHashes, env.Hash())
@@ -446,36 +445,9 @@ func (s *MailserverSuite) TestMailServer() {
 	}
 }
 
-func (s *MailserverSuite) TestDecodeRequest() {
-	s.setupServer(s.server)
-	defer s.server.Close()
-
-	payload := shhext.MessagesRequestPayload{
-		Lower:  50,
-		Upper:  100,
-		Bloom:  []byte{0x01},
-		Limit:  10,
-		Cursor: []byte{},
-		Batch:  true,
-	}
-	data, err := rlp.EncodeToBytes(payload)
-	s.Require().NoError(err)
-
-	id, err := s.shh.NewKeyPair()
-	s.Require().NoError(err)
-	srcKey, err := s.shh.GetPrivateKey(id)
-	s.Require().NoError(err)
-
-	env := s.createEnvelope(whisper.TopicType{0x01}, data, srcKey)
-
-	decodedPayload, err := s.server.decodeRequest(nil, env)
-	s.Require().NoError(err)
-	s.Equal(payload, decodedPayload)
-}
-
 func (s *MailserverSuite) messageExists(envelope *whisper.Envelope, low, upp uint32, bloom []byte, limit uint32) bool {
 	var exist bool
-	mail, _, _, err := s.server.processRequest(nil, low, upp, bloom, limit, nil, false)
+	mail, _, _, err := s.server.processRequest(nil, low, upp, bloom, limit, nil)
 	s.NoError(err)
 	for _, msg := range mail {
 		if msg.Hash() == envelope.Hash() {
@@ -577,10 +549,6 @@ func (s *MailserverSuite) createRequest(p *ServerTestParams) *whisper.Envelope {
 		data = append(data, limitData...)
 	}
 
-	return s.createEnvelope(p.topic, data, p.key)
-}
-
-func (s *MailserverSuite) createEnvelope(topic whisper.TopicType, data []byte, srcKey *ecdsa.PrivateKey) *whisper.Envelope {
 	key, err := s.shh.GetSymKey(keyID)
 	if err != nil {
 		s.T().Fatalf("failed to retrieve sym key with seed %d: %s.", seed, err)
@@ -588,18 +556,17 @@ func (s *MailserverSuite) createEnvelope(topic whisper.TopicType, data []byte, s
 
 	params := &whisper.MessageParams{
 		KeySym:   key,
-		Topic:    topic,
+		Topic:    p.topic,
 		Payload:  data,
 		PoW:      powRequirement * 2,
 		WorkTime: 2,
-		Src:      srcKey,
+		Src:      p.key,
 	}
 
 	msg, err := whisper.NewSentMessage(params)
 	if err != nil {
 		s.T().Fatalf("failed to create new message with seed %d: %s.", seed, err)
 	}
-
 	env, err := msg.Wrap(params, time.Now())
 	if err != nil {
 		s.T().Fatalf("failed to wrap with seed %d: %s.", seed, err)

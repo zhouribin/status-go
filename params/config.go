@@ -15,7 +15,6 @@ import (
 	"github.com/ethereum/go-ethereum/p2p/discv5"
 	"github.com/ethereum/go-ethereum/params"
 	"github.com/status-im/status-go/static"
-	whisper "github.com/status-im/whisper/whisperv6"
 	validator "gopkg.in/go-playground/validator.v9"
 )
 
@@ -79,10 +78,6 @@ type WhisperConfig struct {
 
 	// EnableNTPSync enables NTP synchronizations
 	EnableNTPSync bool
-
-	// MaxMessageSize is a maximum size of a devp2p packet handled by the Whisper protocol,
-	// not only the size of envelopes sent in that packet.
-	MaxMessageSize uint32
 }
 
 // String dumps config object as nicely indented JSON
@@ -441,10 +436,9 @@ func NewNodeConfig(dataDir string, networkID uint64) (*NodeConfig, error) {
 			DatabaseCache: 16,
 		},
 		WhisperConfig: WhisperConfig{
-			DataDir:        wnodeDir,
-			MinimumPoW:     WhisperMinimumPoW,
-			TTL:            WhisperTTL,
-			MaxMessageSize: whisper.DefaultMaxMessageSize,
+			DataDir:    wnodeDir,
+			MinimumPoW: WhisperMinimumPoW,
+			TTL:        WhisperTTL,
 		},
 		SwarmConfig:    SwarmConfig{},
 		RegisterTopics: []discv5.Topic{},

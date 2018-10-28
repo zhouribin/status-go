@@ -281,14 +281,7 @@ func activateShhService(stack *node.Node, config *params.NodeConfig, db *leveldb
 	err = stack.Register(func(ctx *node.ServiceContext) (node.Service, error) {
 		whisperServiceConfig := &whisper.Config{
 			MaxMessageSize:     whisper.DefaultMaxMessageSize,
-			MinimumAcceptedPOW: params.WhisperMinimumPoW,
-		}
-
-		if config.WhisperConfig.MaxMessageSize > 0 {
-			whisperServiceConfig.MaxMessageSize = config.WhisperConfig.MaxMessageSize
-		}
-		if config.WhisperConfig.MinimumPoW > 0 {
-			whisperServiceConfig.MinimumAcceptedPOW = config.WhisperConfig.MinimumPoW
+			MinimumAcceptedPOW: 0.001,
 		}
 
 		whisperService := whisper.New(whisperServiceConfig)

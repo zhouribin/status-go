@@ -27,10 +27,6 @@
   version = "=v1.8.16"
   source = "github.com/status-im/go-ethereum"
 
-[[constraint]]
-  name = "github.com/status-im/whisper"
-  version = "=v1.2.0"
-
 [[override]]
   name = "github.com/golang/protobuf"
   version = "1.1.0"
@@ -165,3 +161,7 @@
 [[constraint]]
   name = "github.com/status-im/migrate"
   branch = "master"
+
+[[constraint]]
+  version = "v1.2.0"
+  name = "github.com/status-im/whisper"

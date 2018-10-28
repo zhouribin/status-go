@@ -31,7 +31,6 @@ import (
 	"github.com/ethereum/go-ethereum/rlp"
 	"github.com/status-im/status-go/db"
 	"github.com/status-im/status-go/params"
-	"github.com/status-im/status-go/services/shhext"
 	whisper "github.com/status-im/whisper/whisperv6"
 	"github.com/syndtr/goleveldb/leveldb"
 	"github.com/syndtr/goleveldb/leveldb/iterator"
@@ -221,8 +220,6 @@ func recoverLevelDBPanics(calleMethodName string) {
 func (s *WMailServer) Archive(env *whisper.Envelope) {
 	defer recoverLevelDBPanics("Archive")
 
-	log.Debug("Archiving envelope", "hash", env.Hash().Hex())
-
 	key := NewDbKey(env.Expiry-env.TTL, env.Hash())
 	rawEnvelope, err := rlp.EncodeToBytes(env)
 	if err != nil {
@@ -240,7 +237,7 @@ func (s *WMailServer) Archive(env *whisper.Envelope) {
 
 // DeliverMail sends mail to specified whisper peer.
 func (s *WMailServer) DeliverMail(peer *whisper.Peer, request *whisper.Envelope) {
-	log.Info("Delivering mail", "peer", peer.ID())
+	log.Info("Delivering mail", "peer", peer.ID)
 	requestsMeter.Mark(1)
 
 	if peer == nil {
@@ -257,62 +254,26 @@ func (s *WMailServer) DeliverMail(peer *whisper.Peer, request *whisper.Envelope)
 
 	defer recoverLevelDBPanics("DeliverMail")
 
-	var (
-		lower, upper uint32
-		bloom        []byte
-		limit        uint32
-		cursor       cursorType
-		batch        bool
-		err          error
-	)
-
-	payload, err := s.decodeRequest(peer.ID(), request)
-	if err == nil {
-		lower, upper = payload.Lower, payload.Upper
-		bloom = payload.Bloom
-		cursor = cursorType(payload.Cursor)
-		limit = payload.Limit
-		batch = payload.Batch
-	} else {
-		log.Debug("Failed to decode request", "err", err, "peerID", peer.ID())
-		lower, upper, bloom, limit, cursor, err = s.validateRequest(peer.ID(), request)
-	}
-
-	if err != nil {
+	if lower, upper, bloom, limit, cursor, err := s.validateRequest(peer.ID(), request); err != nil {
 		requestValidationErrorsCounter.Inc(1)
 		log.Error("Mailserver request failed validaton", "peerID", peer.ID())
 		s.trySendHistoricMessageErrorResponse(peer, request, err)
-		return
-	}
+	} else {
+		_, lastEnvelopeHash, nextPageCursor, err := s.processRequest(peer, lower, upper, bloom, limit, cursor)
 
-	log.Debug("Processing request",
-		"lower", lower, "upper", upper,
-		"bloom", bloom,
-		"limit", limit,
-		"cursor", cursor,
-		"batch", batch)
+		if err != nil {
+			processRequestErrorsCounter.Inc(1)
+			log.Error("Error while delivering mail to the peer", "err", err, "peerID", peer.ID())
+			s.trySendHistoricMessageErrorResponse(peer, request, err)
+			return
+		}
 
-	_, lastEnvelopeHash, nextPageCursor, err := s.processRequest(
-		peer,
-		lower, upper,
-		bloom,
-		limit,
-		cursor,
-		batch)
-	if err != nil {
-		processRequestErrorsCounter.Inc(1)
-		log.Error("Error while processing mail server request", "err", err, "peerID", peer.ID())
-		s.trySendHistoricMessageErrorResponse(peer, request, err)
-		return
-	}
-
-	log.Debug("Sending historic message response", "last", lastEnvelopeHash, "next", nextPageCursor)
-
-	if err := s.sendHistoricMessageResponse(peer, request, lastEnvelopeHash, nextPageCursor); err != nil {
-		historicResponseErrorsCounter.Inc(1)
-		log.Error("Error sending historic message response", "err", err, "peerID", peer.ID())
-		// we still want to try to report error even it it is a p2p error and it is unlikely
-		s.trySendHistoricMessageErrorResponse(peer, request, err)
+		if err := s.sendHistoricMessageResponse(peer, request, lastEnvelopeHash, nextPageCursor); err != nil {
+			historicResponseErrorsCounter.Inc(1)
+			log.Error("Error while sending historic message response", "err", err, "peerID", peer.ID())
+			// we still want to try to report error even it it is a p2p error and it is unlikely
+			s.trySendHistoricMessageErrorResponse(peer, request, err)
+		}
 	}
 }
 
@@ -333,41 +294,13 @@ func (s *WMailServer) exceedsPeerRequests(peer []byte) bool {
 	return false
 }
 
-func (s *WMailServer) createIterator(lower, upper uint32, cursor cursorType) iterator.Iterator {
-	var (
-		emptyHash common.Hash
-		ku        []byte
-		kl        []byte
-	)
-
-	kl = NewDbKey(lower, emptyHash).raw
-	if len(cursor) == dbKeyLength {
-		ku = cursor
-	} else {
-		ku = NewDbKey(upper+1, emptyHash).raw
-	}
-
-	i := s.db.NewIterator(&util.Range{Start: kl, Limit: ku}, nil)
-	// seek to the end as we want to return envelopes in a descending order
-	i.Seek(ku)
-
-	return i
-}
-
 // processRequest processes the current request and re-sends all stored messages
 // accomplishing lower and upper limits. The limit parameter determines the maximum number of
 // messages to be sent back for the current request.
 // The cursor parameter is used for pagination.
 // After sending all the messages, a message of type p2pRequestCompleteCode is sent by the mailserver to
 // the peer.
-func (s *WMailServer) processRequest(
-	peer *whisper.Peer,
-	lower, upper uint32,
-	bloom []byte,
-	limit uint32,
-	cursor cursorType,
-	batch bool,
-) (ret []*whisper.Envelope, lastEnvelopeHash common.Hash, nextPageCursor cursorType, err error) {
+func (s *WMailServer) processRequest(peer *whisper.Peer, lower, upper uint32, bloom []byte, limit uint32, cursor cursorType) (ret []*whisper.Envelope, lastEnvelopeHash common.Hash, nextPageCursor cursorType, err error) {
 	// Recover from possible goleveldb panics
 	defer func() {
 		if r := recover(); r != nil {
@@ -378,15 +311,21 @@ func (s *WMailServer) processRequest(
 	var (
 		sentEnvelopes     uint32
 		sentEnvelopesSize int64
+		zero              common.Hash
+		ku                []byte
+		kl                []byte
 	)
 
-	i := s.createIterator(lower, upper, cursor)
+	kl = NewDbKey(lower, zero).raw
+	if cursor != nil {
+		ku = cursor
+	} else {
+		ku = NewDbKey(upper+1, zero).raw
+	}
+
+	i := s.db.NewIterator(&util.Range{Start: kl, Limit: ku}, nil)
+	i.Seek(ku)
 	defer i.Release()
-
-	var (
-		bundle     []*whisper.Envelope
-		bundleSize uint32
-	)
 
 	start := time.Now()
 
@@ -394,66 +333,28 @@ func (s *WMailServer) processRequest(
 		var envelope whisper.Envelope
 		decodeErr := rlp.DecodeBytes(i.Value(), &envelope)
 		if decodeErr != nil {
-			log.Error("failed to decode RLP", "err", decodeErr)
+			log.Error(fmt.Sprintf("failed to decode RLP: %s", decodeErr))
 			continue
 		}
 
-		if !whisper.BloomFilterMatch(bloom, envelope.Bloom()) {
-			continue
-		}
-
-		newSize := bundleSize + whisper.EnvelopeHeaderLength + uint32(len(envelope.Data))
-		limitReached := limit != noLimits && (int(sentEnvelopes)+len(bundle)) == int(limit)
-		if !limitReached && newSize < s.w.MaxMessageSize() {
-			bundle = append(bundle, &envelope)
-			bundleSize = newSize
-			lastEnvelopeHash = envelope.Hash()
-			continue
-		}
-
-		if peer == nil {
-			// used for test purposes
-			ret = append(ret, bundle...)
-		} else {
-			err = s.sendEnvelopes(peer, bundle, batch)
-			if err != nil {
-				return
+		if whisper.BloomFilterMatch(bloom, envelope.Bloom()) {
+			if peer == nil {
+				// used for test purposes
+				ret = append(ret, &envelope)
+			} else {
+				err = s.w.SendP2PDirect(peer, &envelope)
+				if err != nil {
+					log.Error(fmt.Sprintf("failed to send direct message to peer: %s", err))
+					return
+				}
+				lastEnvelopeHash = envelope.Hash()
 			}
-		}
+			sentEnvelopes++
+			sentEnvelopesSize += whisper.EnvelopeHeaderLength + int64(len(envelope.Data))
 
-		sentEnvelopes += uint32(len(bundle))
-		sentEnvelopesSize += int64(bundleSize)
-
-		if limitReached {
-			bundle = nil
-			bundleSize = 0
-
-			// When the limit is reached, the current retrieved envelope
-			// is not included in the response.
-			// The nextPageCursor is a key used as a limit in a range and
-			// is not included in the range, hence, we need to get
-			// the previous iterator key.
-			i.Next()
-			nextPageCursor = i.Key()
-			break
-		} else {
-			// Reset bundle information and add the last read envelope
-			// which did not make in the last batch.
-			bundle = []*whisper.Envelope{&envelope}
-			bundleSize = whisper.EnvelopeHeaderLength + uint32(len(envelope.Data))
-		}
-
-		lastEnvelopeHash = envelope.Hash()
-	}
-
-	// Send any outstanding envelopes.
-	if len(bundle) > 0 && bundleSize > 0 {
-		if peer == nil {
-			ret = append(ret, bundle...)
-		} else {
-			err = s.sendEnvelopes(peer, bundle, batch)
-			if err != nil {
-				return
+			if limit != noLimits && sentEnvelopes == limit {
+				nextPageCursor = i.Key()
+				break
 			}
 		}
 	}
@@ -464,24 +365,10 @@ func (s *WMailServer) processRequest(
 
 	err = i.Error()
 	if err != nil {
-		err = fmt.Errorf("levelDB iterator error: %v", err)
+		log.Error(fmt.Sprintf("Level DB iterator error: %s", err))
 	}
 
 	return
-}
-
-func (s *WMailServer) sendEnvelopes(peer *whisper.Peer, envelopes []*whisper.Envelope, batch bool) error {
-	if batch {
-		return s.w.SendP2PDirect(peer, envelopes...)
-	}
-
-	for _, env := range envelopes {
-		if err := s.w.SendP2PDirect(peer, env); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 func (s *WMailServer) sendHistoricMessageResponse(peer *whisper.Peer, request *whisper.Envelope, lastEnvelopeHash common.Hash, cursor cursorType) error {
@@ -517,49 +404,8 @@ func (s *WMailServer) openEnvelope(request *whisper.Envelope) *whisper.ReceivedM
 	return nil
 }
 
-func (s *WMailServer) decodeRequest(peerID []byte, request *whisper.Envelope) (shhext.MessagesRequestPayload, error) {
-	var payload shhext.MessagesRequestPayload
-
-	if s.pow > 0.0 && request.PoW() < s.pow {
-		return payload, errors.New("PoW too low")
-	}
-
-	decrypted := s.openEnvelope(request)
-	if decrypted == nil {
-		log.Warn("Failed to decrypt p2p request")
-		return payload, errors.New("failed to decrypt p2p request")
-	}
-
-	if err := s.checkMsgSignature(decrypted, peerID); err != nil {
-		log.Warn("Check message signature failed: %s", "err", err.Error())
-		return payload, fmt.Errorf("check message signature failed: %v", err)
-	}
-
-	if err := rlp.DecodeBytes(decrypted.Payload, &payload); err != nil {
-		return payload, fmt.Errorf("failed to decode data: %v", err)
-	}
-
-	if payload.Upper < payload.Lower {
-		log.Error("Query range is invalid: lower > upper", "lower", payload.Lower, "upper", payload.Upper)
-		return payload, errors.New("query range is invalid: lower > upper")
-	}
-
-	lowerTime := time.Unix(int64(payload.Lower), 0)
-	upperTime := time.Unix(int64(payload.Upper), 0)
-	if upperTime.Sub(lowerTime) > maxQueryRange {
-		log.Warn("Query range too long", "peerID", peerID, "length", upperTime.Sub(lowerTime), "max", maxQueryRange)
-		return payload, fmt.Errorf("query range must be shorted than %d", maxQueryRange)
-	}
-
-	return payload, nil
-}
-
 // validateRequest runs different validations on the current request.
-// DEPRECATED
-func (s *WMailServer) validateRequest(
-	peerID []byte,
-	request *whisper.Envelope,
-) (uint32, uint32, []byte, uint32, cursorType, error) {
+func (s *WMailServer) validateRequest(peerID []byte, request *whisper.Envelope) (uint32, uint32, []byte, uint32, cursorType, error) {
 	if s.pow > 0.0 && request.PoW() < s.pow {
 		return 0, 0, nil, 0, nil, fmt.Errorf("PoW() is too low")
 	}
