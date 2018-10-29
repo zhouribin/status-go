@@ -69,34 +69,9 @@ node('linux') {
         )
     }
 
-    stage('Deploy') {
-        dir(cloneDir) {
-            // For branch builds, replace the old artifact. For develop keep all of them.
-            def version = sh(
-                script: "git describe --exact-match --tag 2>/dev/null || git describe --always",
-                returnStdout: true
-            ).trim()
-            def server = Artifactory.server 'artifacts'
-            def uploadSpec = """{
-                "files": [
-                    {
-                        "pattern": "build/bin/statusgo-android-16.aar",
-                        "target": "libs-release-local/status-im/status-go/${version}/status-go-${version}.aar"
-                    },
-                    {
-                        "pattern": "build/bin/statusgo-ios-9.3-framework/status-go-ios.zip",
-                        "target": "libs-release-local/status-im/status-go-ios-simulator/${version}/status-go-ios-simulator-${version}.zip"
-                    }
-                ]
-            }"""
+    stage('Archive') {
 
-            def buildInfo = Artifactory.newBuildInfo()
-            buildInfo.env.capture = false
-            buildInfo.name = 'status-go (' + gitBranch + '-' + gitShortSHA + ')'
-            server.upload(uploadSpec, buildInfo)
-            server.publishBuildInfo(buildInfo)
-
-            slackSend color: 'good', message: 'status-go `' + version + '` was built successfully. ' + env.BUILD_URL
-        }
+      archiveArtifacts("build/bin/statusgo-android-16.aar")
+      archiveArtifacts("build/bin/statusgo-ios-9.3-framework/status-go-ios.zip")
     }
 }
