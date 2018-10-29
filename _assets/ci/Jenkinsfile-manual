@@ -44,7 +44,6 @@ node('linux') {
     stage('Test') {
         dir(cloneDir) {
             sh 'make setup'
-            sh 'make ci'
         }
     }
 
