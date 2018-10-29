@@ -70,7 +70,7 @@ node('linux') {
 
     stage('Archive') {
 
-      archiveArtifacts("build/bin/statusgo-android-16.aar")
-      archiveArtifacts("build/bin/statusgo-ios-9.3-framework/status-go-ios.zip")
+      archiveArtifacts("src/github.com/status-im/status-go/build/bin/statusgo-android-16.aar")
+      archiveArtifacts("src/github.com/status-im/status-go/build/bin/statusgo-ios-9.3-framework/status-go-ios.zip")
     }
 }
