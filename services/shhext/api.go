@@ -245,7 +245,7 @@ func (api *PublicAPI) SendPublicMessage(ctx context.Context, msg chat.SendPublic
 }
 
 // SendDirectMessage sends a 1:1 chat message to the underlying transport
-func (api *PublicAPI) SendDirectMessage(ctx context.Context, msg chat.SendDirectMessageRPC) ([]hexutil.Bytes, error) {
+func (api *PublicAPI) SendDirectMessage(ctx context.Context, msg chat.SendDirectMessageRPC) (hexutil.Bytes, error) {
 	if !api.service.pfsEnabled {
 		return nil, ErrPFSNotEnabled
 	}
@@ -266,7 +266,7 @@ func (api *PublicAPI) SendDirectMessage(ctx context.Context, msg chat.SendDirect
 		return nil, err
 	}
 
-	var response []hexutil.Bytes
+	var response hexutil.Bytes
 
 	for key, message := range protocolMessages {
 		msg.PubKey = crypto.FromECDSAPub(key)
@@ -278,14 +278,14 @@ func (api *PublicAPI) SendDirectMessage(ctx context.Context, msg chat.SendDirect
 		if err != nil {
 			return nil, err
 		}
-		response = append(response, hash)
+		response = hash
 
 	}
 	return response, nil
 }
 
 // SendPairingMessage sends a 1:1 chat message to our own devices to initiate a pairing session
-func (api *PublicAPI) SendPairingMessage(ctx context.Context, msg chat.SendDirectMessageRPC) ([]hexutil.Bytes, error) {
+func (api *PublicAPI) SendPairingMessage(ctx context.Context, msg chat.SendDirectMessageRPC) (hexutil.Bytes, error) {
 	if !api.service.pfsEnabled {
 		return nil, ErrPFSNotEnabled
 	}
@@ -305,7 +305,7 @@ func (api *PublicAPI) SendPairingMessage(ctx context.Context, msg chat.SendDirec
 		return nil, err
 	}
 
-	var response []hexutil.Bytes
+	var response hexutil.Bytes
 
 	// Enrich with transport layer info
 	whisperMessage := chat.DirectMessageToWhisper(msg, protocolMessage)
@@ -315,13 +315,12 @@ func (api *PublicAPI) SendPairingMessage(ctx context.Context, msg chat.SendDirec
 	if err != nil {
 		return nil, err
 	}
-	response = append(response, hash)
-
+	response = hash
 	return response, nil
 }
 
 // SendGroupMessage sends a group messag chat message to the underlying transport
-func (api *PublicAPI) SendGroupMessage(ctx context.Context, msg chat.SendGroupMessageRPC) ([]hexutil.Bytes, error) {
+func (api *PublicAPI) SendGroupMessage(ctx context.Context, msg chat.SendGroupMessageRPC) (hexutil.Bytes, error) {
 	if !api.service.pfsEnabled {
 		return nil, ErrPFSNotEnabled
 	}
@@ -348,7 +347,7 @@ func (api *PublicAPI) SendGroupMessage(ctx context.Context, msg chat.SendGroupMe
 		return nil, err
 	}
 
-	var response []hexutil.Bytes
+	var response hexutil.Bytes
 
 	for key, message := range protocolMessages {
 		directMessage := chat.SendDirectMessageRPC{
@@ -365,7 +364,7 @@ func (api *PublicAPI) SendGroupMessage(ctx context.Context, msg chat.SendGroupMe
 		if err != nil {
 			return nil, err
 		}
-		response = append(response, hash)
+		response = hash
 
 	}
 	return response, nil
