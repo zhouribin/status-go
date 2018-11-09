@@ -60,7 +60,7 @@ node('linux') {
             'statusgo-ios-simulator': {
                 dir(cloneDir) {
                     sh '''
-                        make statusgo-ios-simulator
+                        make statusgo-ios
                         cd build/bin/statusgo-ios-9.3-framework/
                         zip -r status-go-ios.zip Statusgo.framework
                     '''
