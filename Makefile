@@ -209,7 +209,7 @@ gomobile-init:
 	@gomobile init
 
 install-android-ndk:
-   _assets/scripts/install_android_ndk.sh
+	_assets/scripts/install_android_ndk.sh
 
 gen-install:
 	go get -u github.com/jteeuwen/go-bindata/...
