@@ -206,7 +206,8 @@ gomobile:
 
 gomobile-init:
 	@echo "Initializing gomobile..."
-	@gomobile init
+	@echo $(ANDROID_NDK)
+	@gomobile init -ndk /home/jenkins/android-ndk-r17b
 
 install-android-ndk:
 	_assets/scripts/install_android_ndk.sh
