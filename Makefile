@@ -210,7 +210,6 @@ gomobile-init:
 	@echo "Initializing gomobile..."
 	@gomobile init -ndk ${HOME}/android-ndk-r17b
 
-
 gen-install:
 	go get -u github.com/jteeuwen/go-bindata/...
 	go get -u github.com/golang/protobuf/protoc-gen-go
