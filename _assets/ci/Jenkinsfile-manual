@@ -43,13 +43,13 @@ node('linux') {
 
     stage('Test') {
         dir(cloneDir) {
-            sh 'gomobile init'
             sh 'make setup'
             sh 'make ci'
         }
     }
 
     stage('Build') {
+        sh 'gomobile init'
         sh 'go get github.com/status-im/xgo'
 
         parallel (
