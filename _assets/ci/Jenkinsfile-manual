@@ -49,8 +49,8 @@ node('linux') {
     }
 
     stage('Build') {
-        sh 'gomobile init'
         sh 'go get github.com/status-im/xgo'
+        sh 'gomobile init'
 
         parallel (
             'statusgo-android': {
