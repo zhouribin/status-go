@@ -50,17 +50,18 @@ node('linux') {
 
     stage('Build') {
         sh 'go get github.com/status-im/xgo'
-        sh 'gomobile init'
 
         parallel (
             'statusgo-android': {
                 dir(cloneDir) {
+                    sh 'gomobile init'
                     sh 'make statusgo-android'
                 }
             },
             'statusgo-ios-simulator': {
                 dir(cloneDir) {
                     sh '''
+                        sh 'gomobile init'
                         make statusgo-ios-simulator
                         cd build/bin/statusgo-ios-9.3-framework/
                         zip -r status-go-ios.zip Statusgo.framework
