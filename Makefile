@@ -52,6 +52,8 @@ DOCKER_IMAGE_CUSTOM_TAG ?= $(GIT_COMMIT)
 DOCKER_TEST_WORKDIR = /go/src/github.com/status-im/status-go/
 DOCKER_TEST_IMAGE = golang:1.10
 
+ANDROID_HOME = ${HOME}/android-ndk-r17b
+
 # This is a code for automatic help generator.
 # It supports ANSI colors and categories.
 # To add new item into help output, simply add comments
@@ -205,8 +207,8 @@ gomobile:
 	@go get -u golang.org/x/mobile/cmd/gomobile
 
 gomobile-init:
-	@echo "Installing Android NDK..."
-	@_assets/scripts/install_android_ndk.sh
+	#@echo "Installing Android NDK..."
+	#@_assets/scripts/install_android_ndk.sh
 	@echo "Initializing gomobile..."
 	@gomobile init -ndk ${HOME}/android-ndk-r17b
 
