@@ -54,14 +54,12 @@ node('linux') {
         parallel (
             'statusgo-android': {
                 dir(cloneDir) {
-                    sh 'gomobile init'
                     sh 'make statusgo-android'
                 }
             },
             'statusgo-ios-simulator': {
                 dir(cloneDir) {
                     sh '''
-                        gomobile init
                         make statusgo-ios-simulator
                         cd build/bin/statusgo-ios-9.3-framework/
                         zip -r status-go-ios.zip Statusgo.framework
