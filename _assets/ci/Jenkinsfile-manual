@@ -43,6 +43,7 @@ node('linux') {
 
     stage('Test') {
         dir(cloneDir) {
+            sh 'gomobile init'
             sh 'make setup'
             sh 'make ci'
         }
