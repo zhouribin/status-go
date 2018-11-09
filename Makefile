@@ -52,8 +52,6 @@ DOCKER_IMAGE_CUSTOM_TAG ?= $(GIT_COMMIT)
 DOCKER_TEST_WORKDIR = /go/src/github.com/status-im/status-go/
 DOCKER_TEST_IMAGE = golang:1.10
 
-ANDROID_HOME = ${HOME}/android-ndk-r17b
-
 # This is a code for automatic help generator.
 # It supports ANSI colors and categories.
 # To add new item into help output, simply add comments
@@ -115,7 +113,7 @@ statusgo-linux: xgo ##@cross-compile Build status-go for Linux
 	./_assets/patches/patcher -b . -p geth-xgo -r
 	@echo "Android cross compilation done."
 
-## TODO(divan): rename statusgo-android-16.aar to Statusgo.aar
+statusgo-android: ANDROID_HOME = ${HOME}/android-ndk-r17b
 statusgo-android: gomobile ##@cross-compile Build status-go for Android
 	@echo "Building status-go for Android..."
 	@gomobile bind -target=android/arm -ldflags="-s -w" -o build/bin/statusgo-android-16.aar github.com/status-im/status-go/mobile
