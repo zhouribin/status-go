@@ -194,7 +194,7 @@ xgo:
 install-os-dependencies:
 	_assets/scripts/install_deps.sh
 
-setup: install-os-dependencies dep-install lint-install mock-install gen-install update-fleet-config install-android-ndk gomobile-init ##@other Prepare project for first build
+setup: install-os-dependencies dep-install lint-install mock-install gen-install update-fleet-config gomobile-init ##@other Prepare project for first build
 
 generate: ##@other Regenerate assets and other auto-generated stuff
 	go generate ./static ./static/migrations
@@ -206,11 +206,7 @@ gomobile:
 
 gomobile-init:
 	@echo "Initializing gomobile..."
-	@echo $(ANDROID_NDK)
-	@gomobile init -ndk /home/jenkins/android-ndk-r17b
-
-install-android-ndk:
-	_assets/scripts/install_android_ndk.sh
+	@gomobile init
 
 gen-install:
 	go get -u github.com/jteeuwen/go-bindata/...
