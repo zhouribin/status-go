@@ -205,8 +205,10 @@ gomobile:
 	@go get -u golang.org/x/mobile/cmd/gomobile
 
 gomobile-init:
+	@echo "Installing Android NDK..."
+	@_assets/scripts/install_android_ndk.sh
 	@echo "Initializing gomobile..."
-	@gomobile init
+	@gomobile init -ndk ${HOME}/android-ndk-r17b
 
 
 gen-install:
