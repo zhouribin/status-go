@@ -194,7 +194,7 @@ xgo:
 install-os-dependencies:
 	_assets/scripts/install_deps.sh
 
-setup: install-os-dependencies dep-install lint-install mock-install gen-install update-fleet-config ##@other Prepare project for first build
+setup: install-os-dependencies dep-install lint-install mock-install gen-install update-fleet-config gomobile-init ##@other Prepare project for first build
 
 generate: ##@other Regenerate assets and other auto-generated stuff
 	go generate ./static ./static/migrations
@@ -204,7 +204,10 @@ gomobile:
 	@echo "Installing gomobile..."
 	@go get -u golang.org/x/mobile/cmd/gomobile
 
-setup: dep-install lint-install mock-install gomobile ##@other Prepare project for first build
+gomobile-init:
+	@echo "Initializing gomobile..."
+	@gomobile init
+
 
 gen-install:
 	go get -u github.com/jteeuwen/go-bindata/...
