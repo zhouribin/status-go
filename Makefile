@@ -203,6 +203,7 @@ generate: ##@other Regenerate assets and other auto-generated stuff
 gomobile:
 	@echo "Installing gomobile..."
 	@go get -u golang.org/x/mobile/cmd/gomobile
+	@mkdir -p $(GOBIN)
 
 gomobile-init:
 	@echo "Installing Android NDK..."
