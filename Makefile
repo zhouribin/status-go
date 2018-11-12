@@ -114,7 +114,7 @@ statusgo-linux: xgo ##@cross-compile Build status-go for Linux
 	@echo "Android cross compilation done."
 
 statusgo-android: ANDROID_HOME = ${HOME}/android-ndk-r17b
-statusgo-android: gomobile ##@cross-compile Build status-go for Android
+statusgo-android: gomobile gomobile-init ##@cross-compile Build status-go for Android
 	@echo "Building status-go for Android..."
 	@env ANDROID_HOME=$(HOME)/android-ndk-r17b gomobile bind -target=android/arm -ldflags="-s -w" -o build/bin/statusgo-android-16.aar github.com/status-im/status-go/mobile
 	@echo "Android cross compilation done in build/bin/statusgo-android-16.aar"
