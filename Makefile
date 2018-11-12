@@ -121,9 +121,10 @@ statusgo-android: gomobile ##@cross-compile Build status-go for Android
 
 ## TODO(divan): rename statusgo-ios-9.3-framework to Statusgo.framework/
 statusgo-ios: gomobile	##@cross-compile Build status-go for iOS
-	@echo "Building status-go for iOS..."
-	@gomobile bind -target=ios -ldflags="-s -w" -o build/bin/statusgo-ios-9.3-framework github.com/status-im/status-go/mobile
-	@echo "iOS framework cross compilation done in build/bin/statusgo-ios-9.3-framework"
+	# @echo "Building status-go for iOS..."
+	# @gomobile bind -target=ios -ldflags="-s -w" -o build/bin/statusgo-ios-9.3-framework github.com/status-im/status-go/mobile
+	# @echo "iOS framework cross compilation done in build/bin/statusgo-ios-9.3-framework"
+	@echo "temporarily skipping iOS"
 
 statusgo-library: ##@cross-compile Build status-go as static library for current platform
 	@echo "Building static library..."
