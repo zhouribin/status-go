@@ -60,9 +60,10 @@ node('linux') {
             'statusgo-ios-simulator': {
                 dir(cloneDir) {
                     sh '''
-                        make statusgo-ios
-                        cd build/bin/statusgo-ios-9.3-framework/
-                        zip -r status-go-ios.zip Statusgo.framework
+                        #make statusgo-ios
+                        #cd build/bin/statusgo-ios-9.3-framework/
+                        #zip -r status-go-ios.zip Statusgo.framework
+                        echo "skip iOS build"
                     '''
                 }
             }
@@ -82,10 +83,6 @@ node('linux') {
                     {
                         "pattern": "build/bin/statusgo-android-16.aar",
                         "target": "libs-release-local/status-im/status-go/${version}/status-go-${version}.aar"
-                    },
-                    {
-                        "pattern": "build/bin/statusgo-ios-9.3-framework/status-go-ios.zip",
-                        "target": "libs-release-local/status-im/status-go-ios-simulator/${version}/status-go-ios-simulator-${version}.zip"
                     }
                 ]
             }"""
