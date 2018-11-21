@@ -1,7 +1,7 @@
 .git
 .ethereumtest
 .github
-build/bin
+build/
 statusd-data
 wnode-data
 **/*.test

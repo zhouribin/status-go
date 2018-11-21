@@ -50,6 +50,10 @@ node('linux') {
 
     stage('Build') {
         sh 'go get github.com/status-im/xgo'
+        dir(cloneDir) {
+            // Ensure folders are created with correct owner (otherwise xgo will create files owned by root)
+            sh 'mkdir -p build/lib/'
+        }
 
         parallel (
             'statusgo-android': {
@@ -59,11 +63,11 @@ node('linux') {
             },
             'statusgo-ios-simulator': {
                 dir(cloneDir) {
-                    sh '''
+                    sh """
                         make statusgo-ios-simulator
-                        cd build/bin/statusgo-ios-9.3-framework/
-                        zip -r status-go-ios.zip Statusgo.framework
-                    '''
+                        cd build/lib/
+                        zip -r status-go-ios.zip statusgo-ios-9.3-framework/Statusgo.framework
+                    """
                 }
             }
         )
