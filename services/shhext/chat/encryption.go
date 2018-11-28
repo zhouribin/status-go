@@ -53,7 +53,7 @@ func DefaultEncryptionServiceConfig(installationID string) EncryptionServiceConf
 		MaxSkip:                  1000,
 		MaxKeep:                  3000,
 		MaxMessageKeysPerSession: 2000,
-		BundleRefreshInterval:    14 * 24 * 60 * 60 * 1000,
+		BundleRefreshInterval:    6 * 60 * 60 * 1000,
 		InstallationID:           installationID,
 	}
 }
