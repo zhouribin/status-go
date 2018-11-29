@@ -577,6 +577,38 @@ func TestBIP44ChildDerivation(t *testing.T) {
 	t.Logf("Account 1 key: %s", accounKey2.String())
 }
 
+func TestChildForPurpose(t *testing.T) {
+	masterKey, err := NewKeyFromString(masterPrivKey1)
+	if err != nil {
+		t.Error("NewKeyFromString: cannot create master extended key")
+	}
+
+	bip44Child, err := masterKey.EthBIP44Child(0)
+	if err != nil {
+		t.Error("Error dering BIP44-compliant key")
+	}
+
+	walletChild, err := masterKey.ChildForPurpose(KeyPurposeWallet, 0)
+	if err != nil {
+		t.Error("Error dering BIP44-compliant key")
+	}
+
+	chatChild, err := masterKey.ChildForPurpose(KeyPurposeChat, 0)
+	if err != nil {
+		t.Error("Error dering EIP1581-compliant key")
+	}
+
+	// Check that KeyPurposeWallet generates a BIP44 key
+	if walletChild.String() != bip44Child.String() {
+		t.Errorf("wrong wallet key. expected to be equal to bip44Child")
+	}
+
+	// Check that KeyPurposeChat generates a different key
+	if walletChild.String() == chatChild.String() {
+		t.Errorf("wrong chat key. expected to be diferrent from the wallet key")
+	}
+}
+
 func TestHDWalletCompatibility(t *testing.T) {
 	password := "TREZOR"
 	mnemonic := NewMnemonic()
