@@ -9,7 +9,6 @@ install: make setup
 jobs:
   include:
   - stage: Lint
-    before_script: make dep-ensure
     script:
       - make lint
   - stage: Test with deployed mailservers
