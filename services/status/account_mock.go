@@ -6,10 +6,11 @@ package status
 
 import (
 	ecdsa "crypto/ecdsa"
+	reflect "reflect"
+
 	accounts "github.com/ethereum/go-ethereum/accounts"
 	keystore "github.com/ethereum/go-ethereum/accounts/keystore"
 	gomock "github.com/golang/mock/gomock"
-	reflect "reflect"
 )
 
 // MockWhisperService is a mock of WhisperService interface
@@ -85,16 +86,16 @@ func (mr *MockAccountManagerMockRecorder) AddressToDecryptedAccount(arg0, arg1 i
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "AddressToDecryptedAccount", reflect.TypeOf((*MockAccountManager)(nil).AddressToDecryptedAccount), arg0, arg1)
 }
 
-// SelectAccount mocks base method
-func (m *MockAccountManager) SelectAccount(address, password string) error {
-	ret := m.ctrl.Call(m, "SelectAccount", address, password)
+// SelectWalletAccount mocks base method
+func (m *MockAccountManager) SelectWalletAccount(address, password string) error {
+	ret := m.ctrl.Call(m, "SelectWalletAccount", address, password)
 	ret0, _ := ret[0].(error)
 	return ret0
 }
 
-// SelectAccount indicates an expected call of SelectAccount
-func (mr *MockAccountManagerMockRecorder) SelectAccount(address, password interface{}) *gomock.Call {
-	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectAccount", reflect.TypeOf((*MockAccountManager)(nil).SelectAccount), address, password)
+// SelectWalletAccount indicates an expected call of SelectWalletAccount
+func (mr *MockAccountManagerMockRecorder) SelectWalletAccount(address, password interface{}) *gomock.Call {
+	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "SelectWalletAccount", reflect.TypeOf((*MockAccountManager)(nil).SelectWalletAccount), address, password)
 }
 
 // CreateAccount mocks base method
