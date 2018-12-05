@@ -8,6 +8,7 @@ import (
 	"github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p"
 	"github.com/ethereum/go-ethereum/rpc"
+	"github.com/status-im/status-go/account"
 )
 
 // Make sure that Service implements node.Service interface.
@@ -22,7 +23,7 @@ type WhisperService interface {
 type AccountManager interface {
 	AddressToDecryptedAccount(string, string) (accounts.Account, *keystore.Key, error)
 	SelectWalletAccount(address, password string) error
-	CreateAccount(password string) (address, pubKey, mnemonic string, err error)
+	CreateAccount(password string) (info *account.AccountInfo, err error)
 }
 
 // Service represents our own implementation of status status operations.

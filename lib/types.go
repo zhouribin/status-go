@@ -64,10 +64,12 @@ func (e APIError) Error() string {
 
 // AccountInfo represents account's info.
 type AccountInfo struct {
-	Address  string `json:"address"`
-	PubKey   string `json:"pubkey"`
-	Mnemonic string `json:"mnemonic"`
-	Error    string `json:"error"`
+	WalletAddress string `json:"address"`
+	WalletPubKey  string `json:"pubkey"`
+	ChatAddress   string `json:"chatAddress"`
+	ChatPubKey    string `json:"chatPubkey"`
+	Mnemonic      string `json:"mnemonic"`
+	Error         string `json:"error"`
 }
 
 // NotifyResult is a JSON returned from notify message.

@@ -13,6 +13,25 @@ var (
 	ErrInvalidAccountAddressOrKey = errors.New("cannot parse address or key to valid account address")
 )
 
+type KeyPurpose int
+
+const (
+	KeyPurposeWallet KeyPurpose = iota
+	KeyPurposeChat
+)
+
+type KeyInfo struct {
+	Purpose KeyPurpose
+	Address string
+	PubKey  string
+}
+
+type AccountInfo struct {
+	WalletKeyInfo KeyInfo
+	ChatKeyInfo   KeyInfo
+	Mnemonic      string
+}
+
 // SelectedExtKey is a container for the selected (logged in) external account.
 type SelectedExtKey struct {
 	Address     common.Address

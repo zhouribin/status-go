@@ -129,19 +129,25 @@ func TestManagerTestSuite(t *testing.T) {
 	testPassword := "test-password"
 
 	// Initial test - create test account
-	gethServiceProvider.EXPECT().AccountKeyStore().Return(keyStore, nil)
-	addr, pubKey, mnemonic, err := accManager.CreateAccount(testPassword)
+	gethServiceProvider.EXPECT().AccountKeyStore().Return(keyStore, nil).Times(2)
+	accountInfo, err := accManager.CreateAccount(testPassword)
 	require.NoError(t, err)
-	require.NotEmpty(t, addr)
-	require.NotEmpty(t, pubKey)
-	require.NotEmpty(t, mnemonic)
+
+	require.Equal(t, KeyPurposeWallet, accountInfo.WalletKeyInfo.Purpose)
+	require.NotEmpty(t, accountInfo.WalletKeyInfo.Address)
+	require.NotEmpty(t, accountInfo.WalletKeyInfo.PubKey)
+
+	require.Equal(t, KeyPurposeChat, accountInfo.ChatKeyInfo.Purpose)
+	require.NotEmpty(t, accountInfo.ChatKeyInfo.Address)
+	require.NotEmpty(t, accountInfo.ChatKeyInfo.PubKey)
+	require.NotEmpty(t, accountInfo.Mnemonic)
 
 	s := &ManagerTestSuite{
 		testAccount: testAccount{
 			"test-password",
-			addr,
-			pubKey,
-			mnemonic,
+			accountInfo.WalletKeyInfo.Address,
+			accountInfo.WalletKeyInfo.PubKey,
+			accountInfo.Mnemonic,
 		},
 		gethServiceProvider: gethServiceProvider,
 		accManager:          accManager,
@@ -189,12 +195,12 @@ func (s *ManagerTestSuite) SetupTest() {
 
 func (s *ManagerTestSuite) TestCreateAccount() {
 	// Don't fail on empty password
-	s.gethServiceProvider.EXPECT().AccountKeyStore().Return(s.keyStore, nil)
-	_, _, _, err := s.accManager.CreateAccount(s.password)
+	s.gethServiceProvider.EXPECT().AccountKeyStore().Return(s.keyStore, nil).Times(2)
+	_, err := s.accManager.CreateAccount(s.password)
 	s.NoError(err)
 
-	s.gethServiceProvider.EXPECT().AccountKeyStore().Return(nil, errKeyStore)
-	_, _, _, err = s.accManager.CreateAccount(s.password)
+	s.gethServiceProvider.EXPECT().AccountKeyStore().Return(nil, errKeyStore).Times(2)
+	_, err = s.accManager.CreateAccount(s.password)
 	s.Equal(errKeyStore, err)
 }
 

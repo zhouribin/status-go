@@ -9,6 +9,7 @@ import (
 	"github.com/ethereum/go-ethereum/accounts"
 	"github.com/ethereum/go-ethereum/accounts/keystore"
 	"github.com/golang/mock/gomock"
+	"github.com/status-im/status-go/account"
 	"github.com/stretchr/testify/suite"
 )
 
@@ -112,25 +113,31 @@ var signuptests = []struct {
 	{
 		name: "success signup",
 		expectedResponse: SignupResponse{
-			Address:  "addr",
-			Pubkey:   "pubkey",
-			Mnemonic: "mnemonic",
+			WalletAddress: "addr",
+			WalletPubKey:  "pubkey",
+			Mnemonic:      "mnemonic",
 		},
 		expectedError: nil,
 		prepareExpectations: func(s *StatusSuite) {
-			s.am.EXPECT().CreateAccount("password").Return("addr", "pubkey", "mnemonic", nil)
+			s.am.EXPECT().CreateAccount("password").Return(&account.AccountInfo{
+				WalletKeyInfo: account.KeyInfo{
+					Address: "addr",
+					PubKey:  "pubkey",
+				},
+				Mnemonic: "mnemonic",
+			}, nil)
 		},
 	},
 	{
 		name: "success signup",
 		expectedResponse: SignupResponse{
-			Address:  "",
-			Pubkey:   "",
-			Mnemonic: "",
+			WalletAddress: "",
+			WalletPubKey:  "",
+			Mnemonic:      "",
 		},
 		expectedError: errors.New("could not create the specified account : foo"),
 		prepareExpectations: func(s *StatusSuite) {
-			s.am.EXPECT().CreateAccount("password").Return("", "", "", errors.New("foo"))
+			s.am.EXPECT().CreateAccount("password").Return(nil, errors.New("foo"))
 		},
 	},
 }
@@ -141,9 +148,14 @@ func (s *StatusSuite) TestSignup() {
 
 		var ctx context.Context
 		res, err := s.api.Signup(ctx, SignupRequest{Password: "password"})
-		s.Equal(t.expectedResponse.Address, res.Address, "failed scenario : "+t.name)
-		s.Equal(t.expectedResponse.Pubkey, res.Pubkey, "failed scenario : "+t.name)
-		s.Equal(t.expectedResponse.Mnemonic, res.Mnemonic, "failed scenario : "+t.name)
+		if t.expectedError == nil {
+			s.Equal(t.expectedResponse.WalletAddress, res.WalletAddress, "failed scenario : "+t.name)
+			s.Equal(t.expectedResponse.WalletPubKey, res.WalletPubKey, "failed scenario : "+t.name)
+			s.Equal(t.expectedResponse.Mnemonic, res.Mnemonic, "failed scenario : "+t.name)
+		} else {
+			s.Nil(res)
+		}
+
 		s.Equal(t.expectedError, err, "failed scenario : "+t.name)
 	}
 }
