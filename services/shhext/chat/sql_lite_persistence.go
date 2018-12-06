@@ -144,7 +144,22 @@ func (s *SQLLitePersistence) Open(path string, key string) error {
 
 	s.db = db
 
-	return s.setup()
+	err = s.setup()
+
+	if err != nil {
+		// Remove database and try again
+		os.Remove(path)
+		db, err := openDB(path, key)
+		if err != nil {
+			return err
+		}
+
+		s.db = db
+
+		return s.setup()
+	}
+
+	return nil
 }
 
 // AddPrivateBundle adds the specified BundleContainer to the database
