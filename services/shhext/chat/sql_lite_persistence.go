@@ -92,8 +92,6 @@ func openDB(path string, key string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	keyString := fmt.Sprintf("PRAGMA key=%s", key)
-
 	// Disable concurrent access as not supported by the driver
 	db.SetMaxOpenConns(1)
 
@@ -101,7 +99,14 @@ func openDB(path string, key string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	if _, err = db.Exec(keyString); err != nil {
+	statement := "PRAGMA KEY=?"
+	stmt, err := db.Prepare(statement)
+	if err != nil {
+		return nil, err
+	}
+	defer stmt.Close()
+
+	if _, err = stmt.Exec(key); err != nil {
 		return nil, err
 	}
 
