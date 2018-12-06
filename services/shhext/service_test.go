@@ -85,7 +85,7 @@ func (s *ShhExtSuite) SetupTest() {
 			InstallationID: "1",
 			DataDir:        os.TempDir(),
 			Debug:          true,
-			PFSEnabled:     false,
+			PFSEnabled:     true,
 		}
 		s.services[i] = New(s.whisper[i], nil, nil, config)
 		s.NoError(stack.Register(func(n *node.ServiceContext) (node.Service, error) {
@@ -95,6 +95,12 @@ func (s *ShhExtSuite) SetupTest() {
 		s.nodes[i] = stack
 	}
 	s.services[0].tracker.handler = newHandlerMock(1)
+}
+
+func (s *ShhExtSuite) TestInitProtocol() {
+	os.Remove("/tmp/1.v2.db")
+	err := s.services[0].InitProtocol("example-address", "`090///\nhtaa\rhta9x8923)$$'23")
+	s.NoError(err)
 }
 
 func (s *ShhExtSuite) TestPostMessageWithConfirmation() {
@@ -174,7 +180,7 @@ func (s *ShhExtSuite) TestRequestMessagesErrors() {
 		InstallationID: "1",
 		DataDir:        os.TempDir(),
 		Debug:          false,
-		PFSEnabled:     false,
+		PFSEnabled:     true,
 	}
 	service := New(shh, mock, nil, config)
 	api := NewPublicAPI(service)
@@ -240,7 +246,7 @@ func (s *ShhExtSuite) TestRequestMessagesSuccess() {
 		InstallationID: "1",
 		DataDir:        os.TempDir(),
 		Debug:          false,
-		PFSEnabled:     false,
+		PFSEnabled:     true,
 	}
 	service := New(shh, mock, nil, config)
 	api := NewPublicAPI(service)
