@@ -110,7 +110,8 @@ func (s *Service) InitProtocol(address string, password string) error {
 	}
 
 	if err := chat.MigrateDBFileV2(v1Path, v2Path, password, hashedPassword); err != nil {
-		return err
+		// Remove db file as created with a blank password
+		os.Remove(v1Path)
 	}
 
 	persistence, err := chat.NewSQLLitePersistence(v2Path, hashedPassword)
