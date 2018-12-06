@@ -53,7 +53,7 @@ func NewSQLLitePersistence(path string, key string) (*SQLLitePersistence, error)
 	return s, nil
 }
 
-func MigrateDBFile(oldPath string, newPath string, key string) error {
+func MigrateDBFileV1(oldPath string, newPath string, key string) error {
 	_, err := os.Stat(oldPath)
 
 	// No files, nothing to do
@@ -86,13 +86,46 @@ func MigrateDBFile(oldPath string, newPath string, key string) error {
 
 }
 
+func MigrateDBFileV2(oldPath string, newPath string, oldKey string, newKey string) error {
+	_, err := os.Stat(oldPath)
+
+	// No files, nothing to do
+	if os.IsNotExist(err) {
+		return nil
+	}
+
+	// Any other error, throws
+	if err != nil {
+		return err
+	}
+
+	if err := os.Rename(oldPath, newPath); err != nil {
+		return err
+	}
+
+	// Migrate version that uses actual password
+	db, err := openDB(newPath, oldKey)
+	if err != nil {
+		return err
+	}
+
+	keyString := fmt.Sprintf("PRAGMA rekey= '%s'", newKey)
+
+	if _, err = db.Exec(keyString); err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
 func openDB(path string, key string) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", path)
 	if err != nil {
 		return nil, err
 	}
 
-	keyString := fmt.Sprintf("PRAGMA key=%s", key)
+	keyString := fmt.Sprintf("PRAGMA key = '%s'", key)
 
 	// Disable concurrent access as not supported by the driver
 	db.SetMaxOpenConns(1)
