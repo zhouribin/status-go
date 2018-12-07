@@ -134,12 +134,12 @@ func main() {
 		Topic:          whisperv6.TopicType(topic),
 		Timeout:        120,
 	})
+	sent := time.Now()
 	if err != nil {
 		log.Crit("failed to request for messages", "error", err)
 	}
 	log.Info("requested for messages with a request", "hash", hash)
 
-	var sent time.Time
 	for {
 		select {
 		case msg := <-messages:
@@ -148,7 +148,6 @@ func main() {
 		case ev := <-whispersEvents:
 			switch ev.Event {
 			case whisperv6.EventMailServerRequestSent:
-				sent = time.Now()
 				log.Info("request sent at", "time", sent)
 			case whisperv6.EventMailServerRequestCompleted:
 				finished := time.Since(sent)
