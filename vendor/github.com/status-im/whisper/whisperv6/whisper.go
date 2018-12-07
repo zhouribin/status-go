@@ -928,6 +928,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				packet.Payload = r
 
 				if err = packet.Decode(&envelopes); err == nil {
+					log.Info("Got envelopes", "total", len(envelopes))
 					for _, envelope := range envelopes {
 						whisper.postEvent(envelope, true)
 					}
@@ -942,6 +943,7 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 					return fmt.Errorf("invalid direct messages: %v", err)
 				}
 
+				log.Info("Got single envelope")
 				if err = packet.Decode(&envelope); err == nil {
 					whisper.postEvent(envelope, true)
 					continue
