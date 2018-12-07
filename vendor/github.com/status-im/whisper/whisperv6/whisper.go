@@ -821,6 +821,7 @@ func (whisper *Whisper) sendConfirmation(peer enode.ID, rw p2p.MsgReadWriter, da
 
 // runMessageLoop reads and processes inbound messages directly to merge into client-global state.
 func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
+	var total, size int
 	for {
 		// fetch the next packet
 		packet, err := rw.ReadMsg()
@@ -928,13 +929,14 @@ func (whisper *Whisper) runMessageLoop(p *Peer, rw p2p.MsgReadWriter) error {
 				packet.Payload = r
 
 				if err = packet.Decode(&envelopes); err == nil {
-					log.Info("Got envelopes", "total", len(envelopes))
+					total += len(envelopes)
 					for _, envelope := range envelopes {
+						size += envelope.size()
 						whisper.postEvent(envelope, true)
 					}
+					log.Info("Got envelopes", "total", total, "size", float64(size)/(1024*1024))
 					continue
 				}
-
 				// As we failed to decode envelopes, let's set the offset
 				// to the beginning and try decode data again.
 				// Decoding to a single Envelope is required
