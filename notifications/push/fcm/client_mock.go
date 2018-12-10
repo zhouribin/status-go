@@ -35,6 +35,7 @@ func (m *MockFirebaseClient) EXPECT() *MockFirebaseClientMockRecorder {
 
 // NewFcmRegIdsMsg mocks base method
 func (m *MockFirebaseClient) NewFcmRegIdsMsg(tokens []string, body interface{}) *go_fcm.FcmClient {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "NewFcmRegIdsMsg", tokens, body)
 	ret0, _ := ret[0].(*go_fcm.FcmClient)
 	return ret0
@@ -42,11 +43,13 @@ func (m *MockFirebaseClient) NewFcmRegIdsMsg(tokens []string, body interface{}) 
 
 // NewFcmRegIdsMsg indicates an expected call of NewFcmRegIdsMsg
 func (mr *MockFirebaseClientMockRecorder) NewFcmRegIdsMsg(tokens, body interface{}) *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "NewFcmRegIdsMsg", reflect.TypeOf((*MockFirebaseClient)(nil).NewFcmRegIdsMsg), tokens, body)
 }
 
 // Send mocks base method
 func (m *MockFirebaseClient) Send() (*go_fcm.FcmResponseStatus, error) {
+	m.ctrl.T.Helper()
 	ret := m.ctrl.Call(m, "Send")
 	ret0, _ := ret[0].(*go_fcm.FcmResponseStatus)
 	ret1, _ := ret[1].(error)
@@ -55,6 +58,7 @@ func (m *MockFirebaseClient) Send() (*go_fcm.FcmResponseStatus, error) {
 
 // Send indicates an expected call of Send
 func (mr *MockFirebaseClientMockRecorder) Send() *gomock.Call {
+	mr.mock.ctrl.T.Helper()
 	return mr.mock.ctrl.RecordCallWithMethodType(mr.mock, "Send", reflect.TypeOf((*MockFirebaseClient)(nil).Send))
 }
 
