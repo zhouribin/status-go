@@ -226,6 +226,25 @@ func (b *StatusBackend) ResetChainData() error {
 	return b.startNode(&newcfg)
 }
 
+// Subscribe requests subscription to a specified method (see https://github.com/ethereum/go-ethereum/wiki/RPC-PUB-SUB#supported-subscriptions)
+// It returns a subscription id which can be used to unsubscribe at a later point
+func (b *StatusBackend) Subscribe(ctx context.Context, namespace string, channel interface{}, args ...interface{}) (rpc.SubResult, error) {
+	client := b.statusNode.RPCClient()
+	if client == nil {
+		return rpc.SubResult{}, ErrRPCClientUnavailable
+	}
+	return client.Subscribe(ctx, namespace, channel, args...)
+}
+
+// Unsubscribe requests unsubscription for the subscription represented by subid
+func (b *StatusBackend) Unsubscribe(subid string) error {
+	client := b.statusNode.RPCClient()
+	if client == nil {
+		return ErrRPCClientUnavailable
+	}
+	return client.Unsubscribe(subid)
+}
+
 // CallRPC executes public RPC requests on node's in-proc RPC server.
 func (b *StatusBackend) CallRPC(inputJSON string) (string, error) {
 	client := b.statusNode.RPCClient()

@@ -3,6 +3,7 @@ package main
 // #include <stdlib.h>
 import "C"
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -13,6 +14,7 @@ import (
 	"github.com/status-im/status-go/logutils"
 	"github.com/status-im/status-go/params"
 	"github.com/status-im/status-go/profiling"
+	"github.com/status-im/status-go/rpc"
 	"github.com/status-im/status-go/services/personal"
 	"github.com/status-im/status-go/services/typeddata"
 	"github.com/status-im/status-go/signal"
@@ -496,4 +498,80 @@ func AppStateChange(state *C.char) {
 //export SetSignalEventCallback
 func SetSignalEventCallback(cb unsafe.Pointer) {
 	signal.SetSignalEventCallback(cb)
+}
+
+func watchSubscription(subResult rpc.SubResult, subChan <-chan interface{}) {
+	ok := true
+
+	for ok {
+		var (
+			val interface{}
+			err error
+		)
+
+		select {
+		case val, ok = <-subChan:
+			signal.SendSubscriptionNotification(subResult.SubID, val)
+		case err, ok = <-subResult.Err:
+			if err != nil {
+				signal.SendSubscriptionError(subResult.SubID, err)
+			}
+			if !ok {
+				signal.SendSubscriptionClosed(subResult.SubID)
+			}
+		}
+	}
+}
+
+// Subscribe requests subscription to a specified method (see https://github.com/ethereum/go-ethereum/wiki/RPC-PUB-SUB#supported-subscriptions).
+// It returns a subscription id which can be used to unsubscribe at a later point
+//export Subscribe
+func Subscribe(namespace, args *C.char) (outCBytes *C.char) {
+	var (
+		subResult rpc.SubResult
+		err       error
+		outBytes  []byte
+	)
+
+	defer func() {
+		errString := ""
+		if err != nil {
+			fmt.Fprintln(os.Stderr, err)
+			errString = err.Error()
+		}
+
+		out := SubscribeResult{
+			SubID: subResult.SubID,
+			Error: errString,
+		}
+
+		outBytes, err = json.Marshal(out)
+		if err != nil {
+			logger.Error("failed to marshal Subscribe output", "error", err)
+			outCBytes = makeJSONResponse(err)
+			return
+		}
+
+		outCBytes = C.CString(string(outBytes))
+	}()
+
+	var unmarshalledArgs []interface{}
+	err = json.Unmarshal([]byte(C.GoString(args)), &unmarshalledArgs)
+	if err != nil {
+		return
+	}
+	subChan := make(chan interface{}, 16)
+	subResult, err = statusBackend.Subscribe(context.Background(), C.GoString(namespace), subChan, unmarshalledArgs...)
+	if err == nil {
+		go watchSubscription(subResult, subChan)
+	}
+
+	return
+}
+
+// Unsubscribe requests unsubscription for the subscription represented by subid
+//export Unsubscribe
+func Unsubscribe(subid *C.char) (outCBytes *C.char) {
+	err := statusBackend.Unsubscribe(C.GoString(subid))
+	return makeJSONResponse(err)
 }

@@ -28,6 +28,15 @@ const (
 
 	// EventBundleAdded is triggered when we receive a bundle
 	EventBundleAdded = "bundles.added"
+
+	// EventSubscriptionNotification is triggered when we receive a notification
+	EventSubscriptionNotification = "subscription.notification"
+
+	// EventSubscriptionError is triggered when a subscription encounters an error
+	EventSubscriptionError = "subscription.error"
+
+	// EventSubscriptionClosed is triggered when a subscription is closed
+	EventSubscriptionClosed = "subscription.closed"
 )
 
 // EnvelopeSignal includes hash of the envelope.
@@ -105,4 +114,28 @@ func SendDecryptMessageFailed(sender string) {
 
 func SendBundleAdded(identity string, installationID string) {
 	send(EventBundleAdded, BundleAddedSignal{Identity: identity, InstallationID: installationID})
+}
+
+// SubscriptionNotificationSignal holds the subscription ID and the result
+type SubscriptionNotificationSignal struct {
+	SubID  string      `json:"subscription"`
+	Result interface{} `json:"result"`
+}
+
+func SendSubscriptionNotification(subid string, result interface{}) {
+	send(EventSubscriptionNotification, SubscriptionNotificationSignal{SubID: subid, Result: result})
+}
+
+// SubscriptionErrorSignal holds the subscription ID and the error (if any)
+type SubscriptionErrorSignal struct {
+	SubID string `json:"subscription"`
+	Error string `json:"error,omitempty"`
+}
+
+func SendSubscriptionError(subid string, err error) {
+	send(EventSubscriptionError, SubscriptionErrorSignal{SubID: subid, Error: err.Error()})
+}
+
+func SendSubscriptionClosed(subid string) {
+	send(EventSubscriptionClosed, SubscriptionErrorSignal{SubID: subid})
 }

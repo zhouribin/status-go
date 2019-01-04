@@ -75,3 +75,9 @@ type NotifyResult struct {
 	Status bool   `json:"status"`
 	Error  string `json:"error,omitempty"`
 }
+
+// SubscribeResult is a JSON returned from Subscribe method.
+type SubscribeResult struct {
+	SubID string `json:"subid,omitempty"`
+	Error string `json:"error,omitempty"`
+}

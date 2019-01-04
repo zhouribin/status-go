@@ -13,6 +13,7 @@ import (
 	"github.com/status-im/status-go/params"
 
 	gethrpc "github.com/ethereum/go-ethereum/rpc"
+	uuid "github.com/satori/go.uuid"
 )
 
 const (
@@ -27,6 +28,16 @@ var (
 
 // Handler defines handler for RPC methods.
 type Handler func(context.Context, ...interface{}) (interface{}, error)
+
+type subInfo struct {
+	sub *gethrpc.ClientSubscription
+}
+
+// SubResult represents the result of a call to Subscribe
+type SubResult struct {
+	Err   <-chan error
+	SubID string
+}
 
 // Client represents RPC client with custom routing
 // scheme. It automatically decides where RPC call
@@ -43,6 +54,9 @@ type Client struct {
 	handlersMx sync.RWMutex       // mx guards handlers
 	handlers   map[string]Handler // locally registered handlers
 	log        log.Logger
+
+	subsMx sync.Mutex
+	subs   map[string]subInfo
 }
 
 // NewClient initializes Client and tries to connect to both,
@@ -54,6 +68,7 @@ func NewClient(client *gethrpc.Client, upstream params.UpstreamRPCConfig) (*Clie
 	c := Client{
 		local:    client,
 		handlers: make(map[string]Handler),
+		subs:     make(map[string]subInfo),
 		log:      log.New("package", "status-go/rpc.Client"),
 	}
 
@@ -118,11 +133,77 @@ func (c *Client) CallContextIgnoringLocalHandlers(ctx context.Context, result in
 		return ErrMethodNotFound
 	}
 
+	return c.getRoute(method).CallContext(ctx, result, method, args...)
+}
+
+func (c *Client) getRoute(method string) *gethrpc.Client {
+	var routedClient *gethrpc.Client
 	if c.router.routeRemote(method) {
-		return c.upstream.CallContext(ctx, result, method, args...)
+		routedClient = c.upstream
+	} else {
+		routedClient = c.local
 	}
 
-	return c.local.CallContext(ctx, result, method, args...)
+	return routedClient
+}
+
+// Subscribe requests subscription to a specified method (see https://github.com/ethereum/go-ethereum/wiki/RPC-PUB-SUB#supported-subscriptions)
+// It returns a subscription id which can be used to unsubscribe at a later point
+func (c *Client) Subscribe(ctx context.Context, namespace string, channel interface{}, args ...interface{}) (SubResult, error) {
+	method, ok := args[0].(string)
+	if !ok {
+		return SubResult{}, errors.New("cannot cast first argument (method name) to string")
+	}
+
+	if c.router.routeBlocked(method) {
+		return SubResult{}, ErrMethodNotFound
+	}
+
+	sub, err := c.getRoute(method).Subscribe(ctx, namespace, channel, args...)
+	if err != nil {
+		return SubResult{}, err
+	}
+
+	// Record the subscription internally
+	c.subsMx.Lock()
+	defer c.subsMx.Unlock()
+	uuid, err := uuid.NewV4()
+	if err != nil {
+		sub.Unsubscribe()
+		return SubResult{}, err
+	}
+
+	subid := uuid.String()
+	errChan := make(chan error, 1)
+	c.subs[subid] = subInfo{sub: sub}
+	go func() {
+		// forward error channel until it is closed
+		for err := range sub.Err() {
+			errChan <- err
+		}
+		close(errChan)
+
+		// Remove subscription info once subscription is closed
+		c.subsMx.Lock()
+		delete(c.subs, subid)
+		c.subsMx.Unlock()
+	}()
+
+	return SubResult{SubID: subid, Err: errChan}, nil
+}
+
+// Unsubscribe requests unsubscription for the subscription represented by subid
+func (c *Client) Unsubscribe(subid string) error {
+	c.subsMx.Lock()
+	defer c.subsMx.Unlock()
+
+	if subinfo, ok := c.subs[subid]; ok {
+		subinfo.sub.Unsubscribe()
+		delete(c.subs, subid)
+		return nil
+	}
+
+	return errors.New("subscription not found")
 }
 
 // RegisterHandler registers local handler for specific RPC method.
