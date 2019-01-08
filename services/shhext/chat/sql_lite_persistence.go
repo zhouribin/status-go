@@ -70,7 +70,7 @@ func MigrateDBFile(oldPath string, newPath string, oldKey string, newKey string)
 		return err
 	}
 
-	db, err := openDB(newPath, oldKey)
+	db, err := openDB(newPath, oldKey, 64000)
 	if err != nil {
 		return err
 	}
@@ -85,7 +85,58 @@ func MigrateDBFile(oldPath string, newPath string, oldKey string, newKey string)
 
 }
 
-func openDB(path string, key string) (*sql.DB, error) {
+func MigrateDBKeyKdfIterations(oldPath string, newPath string, key string) error {
+	_, err := os.Stat(oldPath)
+
+	// No files, nothing to do
+	if os.IsNotExist(err) {
+		return nil
+	}
+
+	// Any other error, throws
+	if err != nil {
+		return err
+	}
+
+	db, err := openDB(oldPath, key, 64000)
+	if err != nil {
+		return err
+	}
+
+	attach := fmt.Sprintf(
+		"ATTACH DATABASE '%s' AS newdb KEY '%s'",
+		newPath,
+		key)
+
+	if _, err = db.Exec(attach); err != nil {
+		return err
+	}
+
+	changeKdfIter := "PRAGMA newdb.kdf_iter = 6400"
+
+	if _, err = db.Exec(changeKdfIter); err != nil {
+		return err
+	}
+
+	exportDB := "SELECT sqlcipher_export('newdb')"
+
+	if _, err = db.Exec(exportDB); err != nil {
+		return err
+	}
+
+	if err = db.Close(); err != nil {
+		return err
+	}
+
+	if err = os.Remove(oldPath); err != nil {
+		return err
+	}
+
+	return nil
+
+}
+
+func openDB(path string, key string, kdfIter int) (*sql.DB, error) {
 	db, err := sql.Open("sqlite3", path)
 	if err != nil {
 		return nil, err
@@ -104,7 +155,9 @@ func openDB(path string, key string) (*sql.DB, error) {
 		return nil, err
 	}
 
-	if _, err = db.Exec("PRAGMA cypher_page_size=4096"); err != nil {
+	kdfString := fmt.Sprintf("PRAGMA kdf_iter = '%d'", kdfIter)
+
+	if _, err = db.Exec(kdfString); err != nil {
 		return nil, err
 	}
 	return db, nil
@@ -136,7 +189,7 @@ func (s *SQLLitePersistence) GetSessionStorage() dr.SessionStorage {
 
 // Open opens a file at the specified path
 func (s *SQLLitePersistence) Open(path string, key string) error {
-	db, err := openDB(path, key)
+	db, err := openDB(path, key, 6400)
 	if err != nil {
 		return err
 	}
