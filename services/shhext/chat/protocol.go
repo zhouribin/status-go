@@ -128,6 +128,11 @@ func (p *ProtocolService) DisableInstallation(myIdentityKey *ecdsa.PublicKey, in
 	return p.encryption.DisableInstallation(myIdentityKey, installationID)
 }
 
+// GetPublicBundle retrieves a public bundle given an identity
+func (p *ProtocolService) GetPublicBundle(theirIdentityKey *ecdsa.PublicKey) (*Bundle, error) {
+	return p.encryption.GetPublicBundle(theirIdentityKey)
+}
+
 // HandleMessage unmarshals a message and processes it, decrypting it if it is a 1:1 message.
 func (p *ProtocolService) HandleMessage(myIdentityKey *ecdsa.PrivateKey, theirPublicKey *ecdsa.PublicKey, payload []byte) ([]byte, error) {
 	if p.encryption == nil {

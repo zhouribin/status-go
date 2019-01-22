@@ -9,6 +9,7 @@ import (
 
 	gethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
+	ecrypto "github.com/ethereum/go-ethereum/crypto"
 	"github.com/ethereum/go-ethereum/log"
 	gethnode "github.com/ethereum/go-ethereum/node"
 	"github.com/ethereum/go-ethereum/p2p/enode"
@@ -505,6 +506,26 @@ func (b *StatusBackend) CreateContactCode() (string, error) {
 	}
 
 	bundle, err := st.GetBundle(selectedChatAccount.AccountKey.PrivateKey)
+	if err != nil {
+		return "", err
+	}
+
+	return bundle.ToBase64()
+}
+
+// GetContactCode return the latest contact code
+func (b *StatusBackend) GetContactCode(identity string) (string, error) {
+	st, err := b.statusNode.ShhExtService()
+	if err != nil {
+		return "", err
+	}
+
+	publicKey, err := ecrypto.UnmarshalPubkey([]byte(identity))
+	if err != nil {
+		return "", err
+	}
+
+	bundle, err := st.GetPublicBundle(publicKey)
 	if err != nil {
 		return "", err
 	}
