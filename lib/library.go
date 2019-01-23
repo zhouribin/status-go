@@ -78,9 +78,14 @@ func GetContactCode(identityString *C.char) *C.char {
 		return makeJSONResponse(err)
 	}
 
-	cstr := C.CString(bundle)
+	data, err := json.Marshal(struct {
+		ContactCode string `json:"code"`
+	}{ContactCode: bundle})
+	if err != nil {
+		return makeJSONResponse(err)
+	}
 
-	return cstr
+	return C.CString(string(data))
 }
 
 //export ExtractIdentityFromContactCode

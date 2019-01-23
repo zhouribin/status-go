@@ -7,6 +7,7 @@ import (
 	"math/big"
 	"sync"
 
+	"encoding/hex"
 	gethcommon "github.com/ethereum/go-ethereum/common"
 	"github.com/ethereum/go-ethereum/common/hexutil"
 	ecrypto "github.com/ethereum/go-ethereum/crypto"
@@ -520,7 +521,12 @@ func (b *StatusBackend) GetContactCode(identity string) (string, error) {
 		return "", err
 	}
 
-	publicKey, err := ecrypto.UnmarshalPubkey([]byte(identity))
+	publicKeyBytes, err := hex.DecodeString(identity)
+	if err != nil {
+		return "", err
+	}
+
+	publicKey, err := ecrypto.UnmarshalPubkey(publicKeyBytes)
 	if err != nil {
 		return "", err
 	}
@@ -528,6 +534,10 @@ func (b *StatusBackend) GetContactCode(identity string) (string, error) {
 	bundle, err := st.GetPublicBundle(publicKey)
 	if err != nil {
 		return "", err
+	}
+
+	if bundle == nil {
+		return "", nil
 	}
 
 	return bundle.ToBase64()
