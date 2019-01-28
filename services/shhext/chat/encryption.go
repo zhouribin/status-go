@@ -285,6 +285,11 @@ func (s *EncryptionService) DecryptPayload(myIdentityKey *ecdsa.PrivateKey, thei
 			return nil, err
 		}
 
+		// Add installations with a timestamp of 0, as we don't have bundle informations
+		if err = s.persistence.AddInstallations(theirIdentityKeyC, 0, []string{theirInstallationID}, true); err != nil {
+			return nil, err
+		}
+
 		// We mark the exchange as successful so we stop sending x3dh header
 		if err = s.persistence.RatchetInfoConfirmed(drHeader.GetId(), theirIdentityKeyC, theirInstallationID); err != nil {
 			s.log.Error("Could not confirm ratchet info", "err", err)
@@ -469,34 +474,42 @@ func (s *EncryptionService) EncryptPayload(theirIdentityKey *ecdsa.PublicKey, my
 	s.mutex.Lock()
 	defer s.mutex.Unlock()
 
+	s.log.Debug("Sending message", "theirKey", theirIdentityKey)
+
 	theirIdentityKeyC := ecrypto.CompressPubkey(theirIdentityKey)
 
-	// Get their latest bundle
-	theirBundle, err := s.GetPublicBundle(theirIdentityKey)
+	// Get their installationIds
+	installationIds, err := s.persistence.GetActiveInstallations(s.config.MaxInstallations, theirIdentityKeyC)
 	if err != nil {
 		return nil, err
 	}
 
 	// We don't have any, send a message with DH
-	if theirBundle == nil && !bytes.Equal(theirIdentityKeyC, ecrypto.CompressPubkey(&myIdentityKey.PublicKey)) {
+	if installationIds == nil && !bytes.Equal(theirIdentityKeyC, ecrypto.CompressPubkey(&myIdentityKey.PublicKey)) {
 		return s.EncryptPayloadWithDH(theirIdentityKey, payload)
 	}
 
 	response := make(map[string]*DirectMessageProtocol)
 
-	for installationID, signedPreKeyContainer := range theirBundle.GetSignedPreKeys() {
+	for _, installationID := range installationIds {
+		s.log.Debug("Processing installationID", "installationID", installationID)
 		if s.config.InstallationID == installationID {
 			continue
 		}
+		bundle, err := s.persistence.GetPublicBundle(theirIdentityKey, []string{installationID})
+		if err != nil {
+			return nil, err
+		}
 
-		theirSignedPreKey := signedPreKeyContainer.GetSignedPreKey()
 		// See if a session is there already
+		// If there's a new bundle or time elapsed, got to the next ratchet info
 		drInfo, err := s.persistence.GetAnyRatchetInfo(theirIdentityKeyC, installationID)
 		if err != nil {
 			return nil, err
 		}
 
 		if drInfo != nil {
+			s.log.Debug("Find DR info", "installationID", installationID)
 			encryptedPayload, drHeader, err := s.encryptUsingDR(theirIdentityKey, drInfo, payload)
 			if err != nil {
 				return nil, err
@@ -517,6 +530,18 @@ func (s *EncryptionService) EncryptPayload(theirIdentityKey *ecdsa.PublicKey, my
 			response[drInfo.InstallationID] = &dmp
 			continue
 		}
+
+		theirSignedPreKeyContainer := bundle.GetSignedPreKeys()[installationID]
+
+		// This should not be nil at this point
+		if theirSignedPreKeyContainer == nil {
+			s.log.Warn("Could not find either a ratchet info or a bundle for installationId", "installationID", installationID)
+			continue
+
+		}
+		s.log.Debug("DR info not found, using bundle", "installationID", installationID)
+
+		theirSignedPreKey := theirSignedPreKeyContainer.GetSignedPreKey()
 
 		sharedKey, ourEphemeralKey, err := s.keyFromActiveX3DH(theirIdentityKeyC, theirSignedPreKey, myIdentityKey)
 		if err != nil {
@@ -555,6 +580,8 @@ func (s *EncryptionService) EncryptPayload(theirIdentityKey *ecdsa.PublicKey, my
 			response[drInfo.InstallationID] = dmp
 		}
 	}
+
+	s.log.Debug("Built message", "theirKey", theirIdentityKey)
 
 	return response, nil
 }
