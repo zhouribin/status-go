@@ -376,23 +376,25 @@ func (api *PublicAPI) processPFSMessage(msg *whisper.Message) error {
 	var publicKey *ecdsa.PublicKey
 
 	// Msg.Dst is empty is a public message, nothing to do
-	if msg.Dst != nil {
-		// There's probably a better way to do this
-		keyBytes, err := hexutil.Bytes(msg.Dst).MarshalText()
-		if err != nil {
-			return err
-		}
+	if msg.Dst == nil {
+		return nil
+	}
 
-		privateKey, err = api.service.w.GetPrivateKey(string(keyBytes))
-		if err != nil {
-			return err
-		}
+	// There's probably a better way to do this
+	keyBytes, err := hexutil.Bytes(msg.Dst).MarshalText()
+	if err != nil {
+		return err
+	}
 
-		// This needs to be pushed down in the protocol message
-		publicKey, err = crypto.UnmarshalPubkey(msg.Sig)
-		if err != nil {
-			return err
-		}
+	privateKey, err = api.service.w.GetPrivateKey(string(keyBytes))
+	if err != nil {
+		return err
+	}
+
+	// This needs to be pushed down in the protocol message
+	publicKey, err = crypto.UnmarshalPubkey(msg.Sig)
+	if err != nil {
+		return err
 	}
 
 	response, err := api.service.protocol.HandleMessage(privateKey, publicKey, msg.Payload)
